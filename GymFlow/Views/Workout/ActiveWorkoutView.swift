@@ -129,30 +129,54 @@ struct ActiveWorkoutView: View {
 
     @ViewBuilder
     private func setsCard(_ exercise: ExerciseRecord) -> some View {
-        VStack(spacing: 10) {
-            HStack {
-                Text("Set").frame(width: 36)
-                Text("kg").frame(maxWidth: .infinity)
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Text("Set").frame(width: 54, alignment: .leading)
+                Text("Weight").frame(maxWidth: .infinity)
                 Text("Reps").frame(maxWidth: .infinity)
-                Text("Done").frame(width: 48)
+                Text("Done").frame(width: 44)
             }
-            .font(.caption.weight(.semibold))
+            .font(.caption2.weight(.bold))
+            .textCase(.uppercase)
             .foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 8)
+
+            Divider()
 
             ForEach(exercise.orderedSets) { set in
-                WorkoutSetRow(set: set) { toggleCompletion(set, exercise: exercise) }
-            }
-
-            HStack {
-                Button("Add Set", systemImage: "plus") { addSet(to: exercise) }
-                Spacer()
-                if exercise.sets.count > 1 {
-                    Button("Remove Last", systemImage: "minus", role: .destructive) {
-                        removeLastSet(from: exercise)
-                    }
+                WorkoutSetRow(
+                    set: set,
+                    onChange: saveImmediately,
+                    onToggle: { toggleCompletion(set, exercise: exercise) }
+                )
+                if set.id != exercise.orderedSets.last?.id {
+                    Divider().padding(.leading, 74)
                 }
             }
-            .font(.subheadline)
+
+            Divider()
+                .padding(.top, 4)
+
+            HStack(spacing: 10) {
+                Button { addSet(to: exercise) } label: {
+                    Label("Add Set", systemImage: "plus")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+
+                if exercise.sets.count > 1 {
+                    Button(role: .destructive) {
+                        removeLastSet(from: exercise)
+                    } label: {
+                        Label("Remove", systemImage: "minus")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .font(.subheadline.weight(.semibold))
+            .padding(.top, 12)
         }
         .gymCard()
     }
@@ -274,49 +298,105 @@ struct ActiveWorkoutView: View {
 
 private struct WorkoutSetRow: View {
     let set: WorkoutSetRecord
+    let onChange: () -> Void
     let onToggle: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
-            VStack(spacing: 2) {
-                Text("\(set.setNumber)").font(.headline.monospacedDigit())
-                Toggle("Warm-up", isOn: Binding(
-                    get: { set.isWarmup }, set: { set.isWarmup = $0 }
-                ))
-                .labelsHidden()
-                .toggleStyle(.button)
-                .buttonStyle(.borderless)
-                .font(.caption2)
+        HStack(spacing: 10) {
+            VStack(spacing: 4) {
+                Text("\(set.setNumber)")
+                    .font(.headline.monospacedDigit())
+                Button {
+                    set.isWarmup.toggle()
+                    onChange()
+                } label: {
+                    Text("Warm")
+                        .font(.caption2.weight(.bold))
+                        .lineLimit(1)
+                        .foregroundStyle(set.isWarmup ? Color.orange : Color.secondary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(set.isWarmup ? Color.orange.opacity(0.14) : Color.secondary.opacity(0.1))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
                 .accessibilityLabel("Set \(set.setNumber) warm-up")
+                .accessibilityValue(set.isWarmup ? "On" : "Off")
             }
-            .frame(width: 36)
+            .frame(width: 54)
 
-            TextField("Weight", value: Binding(
-                get: { set.weight }, set: { set.weight = max(0, $0) }
-            ), format: .number)
-            .keyboardType(.decimalPad)
-            .multilineTextAlignment(.center)
-            .textFieldStyle(.roundedBorder)
-            .accessibilityLabel("Set \(set.setNumber) weight")
+            SetValueField(
+                placeholder: "kg",
+                value: Binding(
+                    get: { set.weight },
+                    set: { set.weight = max(0, $0); onChange() }
+                ),
+                keyboardType: .decimalPad,
+                accessibilityLabel: "Set \(set.setNumber) weight"
+            )
 
-            TextField("Reps", value: Binding(
-                get: { set.repetitions }, set: { set.repetitions = max(0, $0) }
-            ), format: .number)
-            .keyboardType(.numberPad)
-            .multilineTextAlignment(.center)
-            .textFieldStyle(.roundedBorder)
-            .accessibilityLabel("Set \(set.setNumber) repetitions")
+            SetValueField(
+                placeholder: "reps",
+                value: Binding(
+                    get: { Double(set.repetitions) },
+                    set: { set.repetitions = max(0, Int($0)); onChange() }
+                ),
+                keyboardType: .numberPad,
+                accessibilityLabel: "Set \(set.setNumber) repetitions",
+                format: .number.precision(.fractionLength(0))
+            )
 
             Button(action: onToggle) {
                 Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.title2)
-                    .foregroundStyle(set.isCompleted ? Color.green : Color.secondary)
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundStyle(set.isCompleted ? Color.green : Color.secondary.opacity(0.75))
+                    .contentTransition(.symbolEffect(.replace))
             }
-            .frame(width: 48)
-            .frame(minHeight: 44)
+            .frame(width: 44, height: 48)
             .accessibilityLabel(set.isCompleted ? "Mark set \(set.setNumber) incomplete" : "Complete set \(set.setNumber)")
         }
-        .padding(.vertical, 3)
-        .opacity(set.isCompleted ? 0.72 : 1)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .background(set.isCompleted ? Color.green.opacity(0.08) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .animation(.snappy, value: set.isCompleted)
+    }
+}
+
+private struct SetValueField: View {
+    let placeholder: String
+    @Binding var value: Double
+    let keyboardType: UIKeyboardType
+    let accessibilityLabel: String
+    var format: FloatingPointFormatStyle<Double>
+
+    init(
+        placeholder: String,
+        value: Binding<Double>,
+        keyboardType: UIKeyboardType,
+        accessibilityLabel: String,
+        format: FloatingPointFormatStyle<Double> = .number.precision(.fractionLength(0 ... 2))
+    ) {
+        self.placeholder = placeholder
+        _value = value
+        self.keyboardType = keyboardType
+        self.accessibilityLabel = accessibilityLabel
+        self.format = format
+    }
+
+    var body: some View {
+        TextField(placeholder, value: $value, format: format)
+            .keyboardType(keyboardType)
+            .font(.body.monospacedDigit().weight(.semibold))
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .background(Color(uiColor: .systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.secondary.opacity(0.16), lineWidth: 1)
+            }
+            .accessibilityLabel(accessibilityLabel)
     }
 }

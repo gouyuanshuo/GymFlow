@@ -129,6 +129,50 @@ xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -conf
 
 Result: exit 0, **CLEAN BUILD SUCCEEDED**.
 
+### 2026-08-06 — Active set-card visual refinement
+
+- Reworked active-workout set rows with a non-wrapping Warm chip, balanced numeric fields, clearer dividers, a larger completion target, completed-row tinting, and equal-width add/remove actions.
+- Weight, repetition, and warm-up edits now explicitly save through the active workout workflow.
+- Hardened the UI smoke test for the brief persisted-active-session race where Start becomes disabled just after the initial Resume lookup.
+- The first UI-test attempt failed before app launch with simulator `Mach error -308`; after restarting the iPhone 17e simulator, the test reached the app. The next run exposed the state race above, and the final rerun passed.
+
+Build command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowSetUIBuildDerivedData CODE_SIGNING_ALLOWED=NO clean build -quiet
+```
+
+Result: exit 0, **CLEAN BUILD SUCCEEDED**.
+
+UI-test command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=30393FFE-FE4E-4706-9E61-78D23C7D1044' -derivedDataPath /tmp/GymFlowSetUITestDerivedData CODE_SIGNING_ALLOWED=NO test -only-testing:GymFlowUITests/GymFlowUITests/testStartSetTimerAndCancelWorkout -quiet
+```
+
+Final result: exit 0; the start/resume, complete-set, rest-timer, and cancel path passed.
+
+### 2026-08-06 — FLAC import support
+
+- Added `.flac` to the validated local-audio formats and updated the Music import instructions and README.
+- Added regression coverage for case-insensitive FLAC destination naming plus an iOS simulator test that generates, imports, copies, and decodes a real FLAC file with AVFoundation.
+
+Build command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowFLACBuildDerivedData CODE_SIGNING_ALLOWED=NO clean build -quiet
+```
+
+Result: exit 0, **CLEAN BUILD SUCCEEDED**.
+
+Unit-test command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=30393FFE-FE4E-4706-9E61-78D23C7D1044' -derivedDataPath /tmp/GymFlowFLACTestDerivedData CODE_SIGNING_ALLOWED=NO test -only-testing:GymFlowTests -quiet
+```
+
+Result: exit 0. All 11 domain tests passed, including real FLAC import and decode verification.
+
 Manual Xcode steps: none for background playback; `UIBackgroundModes` and the playback audio session are configured. A development team/signing identity is required only to install on a physical iPhone.
 
 Known limitations: no lock-screen/Control Center commands, audio artist metadata extraction, progress chart, personal-record detection, or terminated-app timer notification. These are optional/later-scope features; the offline core flow is implemented.
