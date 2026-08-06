@@ -22,20 +22,27 @@ struct MiniPlayerView: View {
                 }
                 .buttonStyle(.plain)
                 Spacer()
+                Button("Previous", systemImage: "backward.fill") { audioPlayer.previous() }
+                    .labelStyle(.iconOnly)
+                    .font(.title3)
+                    .frame(width: 34, height: 44)
                 Button(audioPlayer.isPlaying ? "Pause" : "Play", systemImage: audioPlayer.isPlaying ? "pause.fill" : "play.fill") {
                     audioPlayer.togglePlayPause()
                 }
                 .labelStyle(.iconOnly)
                 .font(.title3)
+                .frame(width: 34, height: 44)
                 Button("Next", systemImage: "forward.fill") { audioPlayer.next() }
                     .labelStyle(.iconOnly)
                     .font(.title3)
+                    .frame(width: 34, height: 44)
             }
             .padding(.horizontal)
             .frame(height: 58)
             .background(.bar)
             .overlay(alignment: .top) { Divider() }
             .sheet(isPresented: $nowPlayingPresented) { NowPlayingView() }
+            .accessibilityElement(children: .contain)
         }
     }
 }

@@ -3,6 +3,7 @@ import SwiftUI
 struct NowPlayingView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var audioPlayer: AudioPlayerService
+    @State private var queuePresented = false
 
     var body: some View {
         NavigationStack {
@@ -51,7 +52,7 @@ struct NowPlayingView: View {
                 .font(.title)
 
                 HStack(spacing: 64) {
-                    Button("Shuffle", systemImage: "shuffle") { audioPlayer.shuffleEnabled.toggle() }
+                    Button("Shuffle", systemImage: "shuffle") { audioPlayer.toggleShuffle() }
                         .foregroundStyle(audioPlayer.shuffleEnabled ? Color.accentColor : Color.secondary)
                     Button("Repeat \(audioPlayer.repeatMode.title)", systemImage: audioPlayer.repeatMode.systemImage) {
                         audioPlayer.cycleRepeatMode()
@@ -65,7 +66,13 @@ struct NowPlayingView: View {
             .padding(.horizontal, 28)
             .navigationTitle("Now Playing")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { Button("Done") { dismiss() } }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Queue", systemImage: "list.bullet") { queuePresented = true }
+                }
+                ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
+            }
+            .sheet(isPresented: $queuePresented) { PlaybackQueueView() }
         }
     }
 }

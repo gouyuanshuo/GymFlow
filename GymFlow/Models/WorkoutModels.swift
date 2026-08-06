@@ -9,6 +9,7 @@ final class WorkoutPlan {
     var createdAt: Date
     var updatedAt: Date
     var sortOrder: Int
+    var assignedPlaylistID: UUID?
     @Relationship(deleteRule: .cascade) var exercises: [PlannedExercise]
 
     init(
@@ -18,6 +19,7 @@ final class WorkoutPlan {
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         sortOrder: Int = 0,
+        assignedPlaylistID: UUID? = nil,
         exercises: [PlannedExercise] = []
     ) {
         self.id = id
@@ -26,6 +28,7 @@ final class WorkoutPlan {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.sortOrder = sortOrder
+        self.assignedPlaylistID = assignedPlaylistID
         self.exercises = exercises
     }
 
@@ -124,6 +127,10 @@ final class WorkoutSession {
     var startedAt: Date
     var completedAt: Date?
     var notes: String
+    var currentExerciseIndex: Int?
+    var currentSetNumber: Int?
+    var playlistID: UUID?
+    var playlistNameSnapshot: String?
     private var statusRawValue: String
     @Relationship(deleteRule: .cascade) var exerciseRecords: [ExerciseRecord]
 
@@ -134,6 +141,10 @@ final class WorkoutSession {
         startedAt: Date = Date(),
         completedAt: Date? = nil,
         notes: String = "",
+        currentExerciseIndex: Int? = nil,
+        currentSetNumber: Int? = nil,
+        playlistID: UUID? = nil,
+        playlistNameSnapshot: String? = nil,
         status: WorkoutSessionStatus = .planned,
         exerciseRecords: [ExerciseRecord] = []
     ) {
@@ -143,6 +154,10 @@ final class WorkoutSession {
         self.startedAt = startedAt
         self.completedAt = completedAt
         self.notes = notes
+        self.currentExerciseIndex = currentExerciseIndex
+        self.currentSetNumber = currentSetNumber
+        self.playlistID = playlistID
+        self.playlistNameSnapshot = playlistNameSnapshot
         self.statusRawValue = status.rawValue
         self.exerciseRecords = exerciseRecords
     }

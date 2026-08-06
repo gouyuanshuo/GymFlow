@@ -11,18 +11,48 @@ struct ActiveWorkoutView: View {
     @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var allSessions: [WorkoutSession]
     @AppStorage("hapticFeedbackEnabled") private var hapticsEnabled = true
     @AppStorage("timerSoundEnabled") private var timerSoundEnabled = true
+    @AppStorage("activeWorkoutSessionID") private var activeWorkoutSessionID = ""
     let session: WorkoutSession
-    @StateObject private var restTimer = RestTimerService()
+    @StateObject private var restTimer: RestTimerService
     @State private var exerciseIndex = 0
     @State private var cancelConfirmation = false
     @State private var finishConfirmation = false
     @State private var summaryPresented = false
     @State private var errorMessage: String?
+    private let liveActivity = WorkoutLiveActivityService.shared
+
+    init(session: WorkoutSession) {
+        self.session = session
+        _restTimer = StateObject(wrappedValue: RestTimerService(
+            keyPrefix: "restTimer.\(session.id.uuidString)",
+            migrationKeyPrefix: "restTimer"
+        ))
+    }
 
     private var exercises: [ExerciseRecord] { session.orderedExerciseRecords }
     private var currentExercise: ExerciseRecord? {
         guard exercises.indices.contains(exerciseIndex) else { return nil }
         return exercises[exerciseIndex]
+    }
+    private var currentSetNumber: Int {
+        let savedSet = session.currentSetNumber.flatMap { savedNumber in
+            currentExercise?.orderedSets.first(where: {
+                $0.setNumber == savedNumber && !$0.isCompleted
+            })
+        }
+        return savedSet?.setNumber
+            ?? currentExercise?.orderedSets.first(where: { !$0.isCompleted })?.setNumber
+            ?? currentExercise?.orderedSets.last?.setNumber
+            ?? 1
+    }
+    private var currentExerciseIsComplete: Bool {
+        guard let currentExercise, !currentExercise.orderedSets.isEmpty else { return false }
+        return currentExercise.orderedSets.allSatisfy(\.isCompleted)
+    }
+    private var allExercisesAreComplete: Bool {
+        !exercises.isEmpty && exercises.allSatisfy { exercise in
+            !exercise.orderedSets.isEmpty && exercise.orderedSets.allSatisfy(\.isCompleted)
+        }
     }
 
     var body: some View {
@@ -31,8 +61,9 @@ struct ActiveWorkoutView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         workoutHeader
-                        if restTimer.isRunning || restTimer.isPaused { RestTimerCard(timer: restTimer) }
-                        if audioPlayer.currentTrack != nil { MiniPlayerView() }
+                        if restTimer.isRunning || restTimer.isPaused || restTimer.didComplete {
+                            RestTimerCard(timer: restTimer)
+                        }
                         if let exercise = currentExercise {
                             exerciseHeader(exercise)
                             previousPerformance(exercise)
@@ -44,16 +75,24 @@ struct ActiveWorkoutView: View {
                     }
                     .padding()
                 }
+                if audioPlayer.currentTrack != nil { MiniPlayerView() }
                 bottomControls
             }
             .navigationTitle(session.planNameSnapshot)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel", role: .destructive) { cancelConfirmation = true }
+                    Button("Minimize", systemImage: "chevron.down") { minimizeWorkout() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Finish") { finishConfirmation = true }.fontWeight(.semibold)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu("Workout options", systemImage: "ellipsis.circle") {
+                        Button("Cancel Workout", systemImage: "xmark.circle", role: .destructive) {
+                            cancelConfirmation = true
+                        }
+                    }
                 }
             }
             .interactiveDismissDisabled()
@@ -75,12 +114,22 @@ struct ActiveWorkoutView: View {
                 }
             }
             .onAppear {
+                activeWorkoutSessionID = session.id.uuidString
+                restoreWorkoutPosition()
                 configureTimerFeedback()
                 restTimer.refresh()
+                syncLiveActivity()
             }
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active { restTimer.refresh() }
+                if phase == .active {
+                    restTimer.refresh()
+                    syncLiveActivity()
+                } else {
+                    persistWorkoutPosition()
+                    syncLiveActivity()
+                }
             }
+            .onChange(of: restTimer.stateRevision) { _, _ in syncLiveActivity() }
         }
     }
 
@@ -105,8 +154,19 @@ struct ActiveWorkoutView: View {
     private func exerciseHeader(_ exercise: ExerciseRecord) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(exercise.exerciseNameSnapshot).font(.title.bold())
-            Text("\(exercise.orderedSets.filter(\.isCompleted).count) of \(exercise.sets.count) sets complete")
-                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                Text("Set \(currentSetNumber) of \(max(1, exercise.sets.count))")
+                Text("•")
+                Text("\(exercise.orderedSets.filter(\.isCompleted).count) complete")
+            }
+            .foregroundStyle(.secondary)
+
+            if currentExerciseIsComplete {
+                Label("Exercise Complete", systemImage: "checkmark.seal.fill")
+                    .font(.headline)
+                    .foregroundStyle(.green)
+                    .padding(.top, 4)
+            }
         }
     }
 
@@ -197,21 +257,30 @@ struct ActiveWorkoutView: View {
     }
 
     private var bottomControls: some View {
-        HStack(spacing: 16) {
-            Button("Previous", systemImage: "chevron.left") {
-                exerciseIndex = max(0, exerciseIndex - 1)
-            }
-            .disabled(exerciseIndex == 0)
-            .frame(maxWidth: .infinity, minHeight: 44)
+        VStack(spacing: 10) {
+            HStack(spacing: 16) {
+                Button("Previous", systemImage: "chevron.left") {
+                    navigate(to: exerciseIndex - 1)
+                }
+                .disabled(exerciseIndex == 0)
+                .frame(maxWidth: .infinity, minHeight: 44)
 
-            Button("Next", systemImage: "chevron.right") {
-                exerciseIndex = min(max(0, exercises.count - 1), exerciseIndex + 1)
+                Button("Next", systemImage: "chevron.right") {
+                    navigate(to: exerciseIndex + 1)
+                }
+                .labelStyle(.titleAndIcon)
+                .disabled(exerciseIndex >= exercises.count - 1)
+                .frame(maxWidth: .infinity, minHeight: 44)
             }
-            .labelStyle(.titleAndIcon)
-            .disabled(exerciseIndex >= exercises.count - 1)
-            .frame(maxWidth: .infinity, minHeight: 44)
+            .buttonStyle(.bordered)
+
+            if allExercisesAreComplete {
+                Button("Review and Finish Workout", systemImage: "checkmark.circle.fill") {
+                    finishConfirmation = true
+                }
+                .buttonStyle(PrimaryButtonStyle())
+            }
         }
-        .buttonStyle(.bordered)
         .padding()
         .background(.bar)
     }
@@ -234,7 +303,10 @@ struct ActiveWorkoutView: View {
             if hapticsEnabled { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
             restTimer.start(duration: exercise.restSeconds)
         }
+        session.currentSetNumber = exercise.orderedSets.first(where: { !$0.isCompleted })?.setNumber
+            ?? exercise.orderedSets.last?.setNumber
         saveImmediately()
+        syncLiveActivity()
     }
 
     private func addSet(to exercise: ExerciseRecord) {
@@ -245,7 +317,9 @@ struct ActiveWorkoutView: View {
             repetitions: previous?.repetitions ?? 0
         )
         exercise.sets.append(newSet)
+        session.currentSetNumber = newSet.setNumber
         saveImmediately()
+        syncLiveActivity()
     }
 
     private func removeLastSet(from exercise: ExerciseRecord) {
@@ -253,6 +327,39 @@ struct ActiveWorkoutView: View {
         exercise.sets.removeAll { $0.id == last.id }
         modelContext.delete(last)
         saveImmediately()
+        syncLiveActivity()
+    }
+
+    private func restoreWorkoutPosition() {
+        let savedIndex = session.currentExerciseIndex ?? firstIncompleteExerciseIndex()
+        exerciseIndex = min(max(0, savedIndex), max(0, exercises.count - 1))
+        session.currentExerciseIndex = exerciseIndex
+        session.currentSetNumber = currentSetNumber
+        saveImmediately()
+    }
+
+    private func firstIncompleteExerciseIndex() -> Int {
+        exercises.firstIndex(where: { exercise in
+            exercise.orderedSets.contains(where: { !$0.isCompleted })
+        }) ?? max(0, exercises.count - 1)
+    }
+
+    private func navigate(to index: Int) {
+        guard exercises.indices.contains(index) else { return }
+        exerciseIndex = index
+        persistWorkoutPosition()
+        syncLiveActivity()
+    }
+
+    private func persistWorkoutPosition() {
+        session.currentExerciseIndex = exerciseIndex
+        session.currentSetNumber = currentSetNumber
+        saveImmediately()
+    }
+
+    private func minimizeWorkout() {
+        persistWorkoutPosition()
+        dismiss()
     }
 
     private func saveImmediately() {
@@ -266,6 +373,8 @@ struct ActiveWorkoutView: View {
         restTimer.cancel()
         do {
             try modelContext.save()
+            activeWorkoutSessionID = ""
+            endLiveActivity()
             summaryPresented = true
         } catch {
             session.status = .active
@@ -280,6 +389,8 @@ struct ActiveWorkoutView: View {
         restTimer.cancel()
         do {
             try modelContext.save()
+            activeWorkoutSessionID = ""
+            endLiveActivity()
             dismiss()
         } catch {
             session.status = .active
@@ -293,6 +404,36 @@ struct ActiveWorkoutView: View {
             if hapticsEnabled { UINotificationFeedbackGenerator().notificationOccurred(.success) }
             if timerSoundEnabled { AudioServicesPlaySystemSound(1057) }
         }
+    }
+
+    private func syncLiveActivity() {
+        liveActivity.startOrUpdate(
+            sessionID: session.id,
+            workoutName: session.planNameSnapshot,
+            snapshot: liveActivitySnapshot
+        )
+    }
+
+    private func endLiveActivity() {
+        liveActivity.end(sessionID: session.id, finalSnapshot: liveActivitySnapshot)
+    }
+
+    private var liveActivitySnapshot: WorkoutActivitySnapshot {
+        let exercise = currentExercise
+        let completedExercises = exercises.filter { record in
+            !record.orderedSets.isEmpty && record.orderedSets.allSatisfy(\.isCompleted)
+        }.count
+        return WorkoutActivitySnapshot(
+            exerciseName: exercise?.exerciseNameSnapshot ?? "Workout complete",
+            currentSet: currentSetNumber,
+            totalSets: max(1, exercise?.orderedSets.count ?? 1),
+            completedExercises: completedExercises,
+            totalExercises: exercises.count,
+            workoutStartDate: session.startedAt,
+            restEndDate: restTimer.deadline,
+            pausedRestSeconds: restTimer.isPaused ? restTimer.remainingSeconds : 0,
+            restComplete: restTimer.didComplete
+        )
     }
 }
 

@@ -29,8 +29,20 @@ final class GymFlowUITests: XCTestCase {
         completeSet.tap()
         XCTAssertTrue(app.staticTexts["Rest Timer"].waitForExistence(timeout: 5))
 
-        app.buttons["Cancel"].tap()
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(app.buttons["Complete set 2"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Rest Timer"].waitForExistence(timeout: 5))
+
+        app.buttons["Minimize"].tap()
+        XCTAssertTrue(app.buttons["Resume Workout"].waitForExistence(timeout: 5))
+        app.buttons["Resume Workout"].tap()
+        XCTAssertTrue(app.buttons["Complete set 2"].waitForExistence(timeout: 5))
+
+        app.buttons["Workout options"].tap()
         let cancelWorkout = app.buttons["Cancel Workout"]
+        XCTAssertTrue(cancelWorkout.waitForExistence(timeout: 3))
+        cancelWorkout.tap()
         XCTAssertTrue(cancelWorkout.waitForExistence(timeout: 3))
         cancelWorkout.tap()
         XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 5))

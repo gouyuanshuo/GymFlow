@@ -24,7 +24,9 @@ struct GymFlowApp: App {
             WorkoutSession.self,
             ExerciseRecord.self,
             WorkoutSetRecord.self,
-            ImportedTrack.self
+            ImportedTrack.self,
+            Playlist.self,
+            PlaylistTrack.self
         ])
     }
 }

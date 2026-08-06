@@ -31,6 +31,9 @@ struct WorkoutCompletionView: View {
                         value: "\(GymFlowFormatters.weight(session.trainingVolume)) kg",
                         icon: "scalemass"
                     )
+                    if let playlistName = session.playlistNameSnapshot {
+                        SummaryMetric(title: "Workout Playlist", value: playlistName, icon: "music.note.list")
+                    }
 
                     VStack(alignment: .leading) {
                         Text("Workout Notes").font(.headline)

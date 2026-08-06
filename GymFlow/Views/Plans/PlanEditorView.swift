@@ -5,6 +5,7 @@ struct PlanEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \WorkoutPlan.sortOrder) private var plans: [WorkoutPlan]
+    @Query(sort: \Playlist.sortOrder) private var playlists: [Playlist]
     @AppStorage("defaultRestDuration") private var defaultRestDuration = 90
     let plan: WorkoutPlan?
     @State private var draft: PlanDraft
@@ -24,6 +25,20 @@ struct PlanEditorView: View {
                     .accessibilityLabel("Plan name")
                 TextField("Notes (optional)", text: $draft.notes, axis: .vertical)
                     .lineLimit(2...5)
+            }
+
+            Section("Workout Music") {
+                Picker("Assigned playlist", selection: $draft.assignedPlaylistID) {
+                    Text("None").tag(nil as UUID?)
+                    ForEach(playlists) { playlist in
+                        Text(playlist.name).tag(Optional(playlist.id))
+                    }
+                }
+                if playlists.isEmpty {
+                    Text("Create a playlist in Music to assign it to this workout.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section {
@@ -115,6 +130,7 @@ struct PlanEditorView: View {
                 obsolete.forEach(modelContext.delete)
                 plan.name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
                 plan.notes = draft.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+                plan.assignedPlaylistID = draft.assignedPlaylistID
                 plan.updatedAt = Date()
             } else {
                 let nextOrder = (plans.map(\.sortOrder).max() ?? -1) + 1
@@ -122,6 +138,7 @@ struct PlanEditorView: View {
                     name: draft.name.trimmingCharacters(in: .whitespacesAndNewlines),
                     notes: draft.notes.trimmingCharacters(in: .whitespacesAndNewlines),
                     sortOrder: nextOrder,
+                    assignedPlaylistID: draft.assignedPlaylistID,
                     exercises: savedExercises
                 ))
             }

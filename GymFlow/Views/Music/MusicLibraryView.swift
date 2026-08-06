@@ -6,49 +6,136 @@ struct MusicLibraryView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var audioPlayer: AudioPlayerService
     @Query(sort: \ImportedTrack.sortOrder) private var tracks: [ImportedTrack]
+    @Query private var memberships: [PlaylistTrack]
     @State private var importerPresented = false
     @State private var pendingDeletion: ImportedTrack?
+    @State private var pendingAddToPlaylist: ImportedTrack?
     @State private var errorMessage: String?
+    @State private var selectedSection: MusicSection = .library
+    @State private var searchText = ""
+    @AppStorage("musicLibrarySort") private var sortRawValue = MusicLibrarySort.libraryOrder.rawValue
+
+    private var sortOrder: MusicLibrarySort {
+        MusicLibrarySort(rawValue: sortRawValue) ?? .libraryOrder
+    }
+
+    private var visibleTracks: [ImportedTrack] {
+        let filtered = tracks.filter { track in
+            searchText.isEmpty
+                || track.title.localizedCaseInsensitiveContains(searchText)
+                || track.artist.localizedCaseInsensitiveContains(searchText)
+                || track.originalFileName.localizedCaseInsensitiveContains(searchText)
+        }
+        switch sortOrder {
+        case .libraryOrder: return filtered.sorted { $0.sortOrder < $1.sortOrder }
+        case .title: return filtered.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        case .artist: return filtered.sorted {
+            let lhs = $0.artist.isEmpty ? $0.title : $0.artist
+            let rhs = $1.artist.isEmpty ? $1.title : $1.artist
+            return lhs.localizedStandardCompare(rhs) == .orderedAscending
+        }
+        case .recentlyImported: return filtered.sorted { $0.createdAt > $1.createdAt }
+        }
+    }
 
     var body: some View {
         NavigationStack {
-            Group {
-                if tracks.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Imported Music", systemImage: "music.note.list")
-                    } description: {
-                        Text("Import unprotected MP3, M4A, AAC, WAV, AIFF, CAF, or FLAC audio from Files.")
-                    } actions: {
-                        Button("Import Audio", systemImage: "square.and.arrow.down") {
-                            importerPresented = true
-                        }
-                        .buttonStyle(.borderedProminent)
+            VStack(spacing: 0) {
+                Picker("Music Section", selection: $selectedSection) {
+                    ForEach(MusicSection.allCases) { section in
+                        Text(section.title).tag(section)
                     }
-                } else {
-                    List {
-                        Section {
-                            ForEach(tracks) { track in
-                                Button { audioPlayer.play(track) } label: {
-                                    TrackRow(track: track, isCurrent: audioPlayer.currentTrack?.id == track.id)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                .padding(.vertical, 10)
+
+                if selectedSection == .library {
+                    Group {
+                        if tracks.isEmpty {
+                            ContentUnavailableView {
+                                Label("No Imported Music", systemImage: "music.note.list")
+                            } description: {
+                                Text("Import unprotected MP3, M4A, AAC, WAV, AIFF, CAF, or FLAC audio from Files.")
+                            } actions: {
+                                Button("Import Audio", systemImage: "square.and.arrow.down") {
+                                    importerPresented = true
                                 }
-                                .buttonStyle(.plain)
-                                .swipeActions {
-                                    Button("Delete", role: .destructive) { pendingDeletion = track }
+                                .buttonStyle(.borderedProminent)
+                            }
+                        } else {
+                            List {
+                                Section {
+                                    ForEach(visibleTracks) { track in
+                                        let isCurrent = audioPlayer.currentTrack?.id == track.id
+                                        Button {
+                                            audioPlayer.setQueue(
+                                                tracks.sorted { $0.sortOrder < $1.sortOrder },
+                                                name: "Music Library",
+                                                startAt: track.id,
+                                                autoplay: true
+                                            )
+                                        } label: {
+                                            TrackRow(track: track, isCurrent: isCurrent)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .swipeActions(edge: .leading) {
+                                            Button("Add to Playlist", systemImage: "text.badge.plus") {
+                                                pendingAddToPlaylist = track
+                                            }
+                                            .tint(.accentColor)
+                                        }
+                                        .swipeActions {
+                                            Button("Delete", role: .destructive) { pendingDeletion = track }
+                                        }
+                                        .contextMenu {
+                                            Button("Add to Playlist", systemImage: "text.badge.plus") {
+                                                pendingAddToPlaylist = track
+                                            }
+                                            Button("Delete", systemImage: "trash", role: .destructive) {
+                                                pendingDeletion = track
+                                            }
+                                        }
+                                    }
+                                    .onMove(perform: moveTracks)
+                                    .moveDisabled(sortOrder != .libraryOrder)
+                                } header: {
+                                    HStack {
+                                        Text("Music Library")
+                                        Spacer()
+                                        Menu("Sort Music", systemImage: "arrow.up.arrow.down") {
+                                            ForEach(MusicLibrarySort.allCases) { option in
+                                                Button {
+                                                    sortRawValue = option.rawValue
+                                                } label: {
+                                                    if option == sortOrder {
+                                                        Label(option.title, systemImage: "checkmark")
+                                                    } else {
+                                                        Text(option.title)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                } footer: {
+                                    Text("Only local, unprotected files are supported. Subscription music cannot be imported.")
                                 }
                             }
-                            .onMove(perform: moveTracks)
-                        } footer: {
-                            Text("Only local, unprotected files are supported. Subscription music cannot be imported.")
                         }
                     }
+                } else {
+                    PlaylistsView()
                 }
             }
             .navigationTitle("Music")
             .toolbar {
-                if !tracks.isEmpty { EditButton() }
-                Button("Import Audio", systemImage: "plus") { importerPresented = true }
-                    .accessibilityLabel("Import local audio")
+                if selectedSection == .library {
+                    if !tracks.isEmpty && sortOrder == .libraryOrder { EditButton() }
+                    Button("Import Audio", systemImage: "plus") { importerPresented = true }
+                        .accessibilityLabel("Import local audio")
+                }
             }
+            .searchable(text: $searchText, prompt: selectedSection == .library ? "Search songs" : "Search is available in playlists")
             .fileImporter(
                 isPresented: $importerPresented,
                 allowedContentTypes: [.audio],
@@ -60,7 +147,7 @@ struct MusicLibraryView: View {
             )) {
                 Button("Delete", role: .destructive) { deletePendingTrack() }
                 Button("Cancel", role: .cancel) { pendingDeletion = nil }
-            } message: { Text("The copied audio file will also be deleted from GymFlow.") }
+            } message: { Text("The copied audio file and all of its playlist memberships will be deleted from GymFlow.") }
             .alert("Music Error", isPresented: Binding(
                 get: { errorMessage != nil || audioPlayer.lastError != nil },
                 set: {
@@ -69,8 +156,9 @@ struct MusicLibraryView: View {
             )) { Button("OK", role: .cancel) { } } message: {
                 Text(errorMessage ?? audioPlayer.lastError ?? "Unknown error")
             }
-            .onAppear { audioPlayer.setPlaylist(tracks) }
-            .onChange(of: tracks.map(\.id)) { _, _ in audioPlayer.setPlaylist(tracks) }
+            .sheet(item: $pendingAddToPlaylist) { track in
+                AddToPlaylistView(track: track)
+            }
         }
     }
 
@@ -123,6 +211,7 @@ struct MusicLibraryView: View {
         guard let track = pendingDeletion else { return }
         do {
             audioPlayer.stopIfPlaying(track)
+            memberships.filter { $0.trackID == track.id }.forEach(modelContext.delete)
             try AudioFileStore().delete(storedFileName: track.storedFileName)
             modelContext.delete(track)
             try modelContext.save()
@@ -133,29 +222,28 @@ struct MusicLibraryView: View {
     }
 }
 
-private struct TrackRow: View {
-    let track: ImportedTrack
-    let isCurrent: Bool
+private enum MusicSection: String, CaseIterable, Identifiable {
+    case library
+    case playlists
 
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: isCurrent ? "speaker.wave.2.fill" : "music.note")
-                .frame(width: 28)
-                .foregroundStyle(isCurrent ? Color.accentColor : Color.secondary)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(track.title).font(.headline).foregroundStyle(.primary)
-                Text(track.artist.isEmpty ? track.originalFileName : track.artist)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer()
-            if let duration = track.duration {
-                Text(GymFlowFormatters.duration(duration)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-            }
+    var id: String { rawValue }
+    var title: String { self == .library ? "Library" : "Playlists" }
+}
+
+private enum MusicLibrarySort: String, CaseIterable, Identifiable {
+    case libraryOrder
+    case title
+    case artist
+    case recentlyImported
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .libraryOrder: "Playlist Order"
+        case .title: "Title"
+        case .artist: "Artist"
+        case .recentlyImported: "Import Date"
         }
-        .contentShape(Rectangle())
-        .padding(.vertical, 3)
     }
 }
 

@@ -3,9 +3,15 @@ import SwiftUI
 
 struct TodayView: View {
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var audioPlayer: AudioPlayerService
     @Query(sort: \WorkoutPlan.sortOrder) private var plans: [WorkoutPlan]
     @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
+    @Query(sort: \Playlist.sortOrder) private var playlists: [Playlist]
+    @Query private var playlistMemberships: [PlaylistTrack]
+    @Query(sort: \ImportedTrack.sortOrder) private var tracks: [ImportedTrack]
     @AppStorage("selectedWorkoutPlanID") private var selectedPlanID = ""
+    @AppStorage("activeWorkoutSessionID") private var activeWorkoutSessionID = ""
+    @AppStorage("automaticallyPlayAssignedPlaylist") private var automaticallyPlayAssignedPlaylist = false
     @State private var presentedSession: WorkoutSession?
     @State private var settingsPresented = false
     @State private var errorMessage: String?
@@ -15,7 +21,9 @@ struct TodayView: View {
     }
 
     private var activeSession: WorkoutSession? {
-        sessions.first(where: { $0.status == .active })
+        sessions.first(where: {
+            $0.status == .active && $0.id.uuidString == activeWorkoutSessionID
+        }) ?? sessions.first(where: { $0.status == .active })
     }
 
     var body: some View {
@@ -57,6 +65,7 @@ struct TodayView: View {
             .alert("Workout Error", isPresented: errorBinding) {
                 Button("OK", role: .cancel) { }
             } message: { Text(errorMessage ?? "Unknown error") }
+            .onAppear { reconcileActiveSessionIdentity() }
         }
     }
 
@@ -88,6 +97,12 @@ struct TodayView: View {
                 Label("About \(plan.expectedDurationMinutes) min", systemImage: "clock")
             }
             .font(.subheadline)
+
+            if let playlist = assignedPlaylist(for: plan) {
+                Label(playlist.name, systemImage: "music.note.list")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
 
             if let last = sessions.first(where: {
                 $0.status == .completed && $0.workoutPlanID == plan.id
@@ -126,15 +141,47 @@ struct TodayView: View {
     }
 
     private func start(_ plan: WorkoutPlan) {
-        let session = WorkoutService.makeSession(from: plan)
+        let playlist = assignedPlaylist(for: plan)
+        let session = WorkoutService.makeSession(
+            from: plan,
+            previousSessions: sessions,
+            playlist: playlist
+        )
         modelContext.insert(session)
         do {
             try modelContext.save()
             selectedPlanID = plan.id.uuidString
+            activeWorkoutSessionID = session.id.uuidString
+            if let playlist {
+                audioPlayer.setQueue(
+                    PlaylistService.orderedTracks(
+                        for: playlist.id,
+                        memberships: playlistMemberships,
+                        tracks: tracks
+                    ),
+                    name: playlist.name,
+                    playlistID: playlist.id,
+                    shuffled: false,
+                    autoplay: automaticallyPlayAssignedPlaylist
+                )
+            }
             presentedSession = session
         } catch {
             modelContext.delete(session)
             errorMessage = "The workout could not be started. \(error.localizedDescription)"
+        }
+    }
+
+    private func assignedPlaylist(for plan: WorkoutPlan) -> Playlist? {
+        guard let playlistID = plan.assignedPlaylistID else { return nil }
+        return playlists.first(where: { $0.id == playlistID })
+    }
+
+    private func reconcileActiveSessionIdentity() {
+        if let activeSession {
+            activeWorkoutSessionID = activeSession.id.uuidString
+        } else {
+            activeWorkoutSessionID = ""
         }
     }
 }
