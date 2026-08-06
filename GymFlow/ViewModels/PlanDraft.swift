@@ -4,11 +4,13 @@ import Foundation
 struct PlanDraft {
     var name: String
     var notes: String
+    var assignedPlaylistID: UUID?
     var exercises: [PlannedExerciseDraft]
 
     init(plan: WorkoutPlan? = nil) {
         name = plan?.name ?? ""
         notes = plan?.notes ?? ""
+        assignedPlaylistID = plan?.assignedPlaylistID
         exercises = plan?.orderedExercises.map(PlannedExerciseDraft.init) ?? []
     }
 }

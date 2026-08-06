@@ -4,6 +4,7 @@ import SwiftUI
 struct PlansView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \WorkoutPlan.sortOrder) private var plans: [WorkoutPlan]
+    @Query(sort: \Playlist.sortOrder) private var playlists: [Playlist]
     @State private var editorPresented = false
     @State private var editorPlan: WorkoutPlan?
     @State private var pendingDeletion: WorkoutPlan?
@@ -25,7 +26,10 @@ struct PlansView: View {
                     List {
                         ForEach(plans) { plan in
                             Button { presentEditor(plan) } label: {
-                                PlanRow(plan: plan)
+                                PlanRow(
+                                    plan: plan,
+                                    playlistName: playlists.first(where: { $0.id == plan.assignedPlaylistID })?.name
+                                )
                             }
                             .buttonStyle(.plain)
                             .contextMenu {
@@ -106,6 +110,7 @@ struct PlansView: View {
 
 private struct PlanRow: View {
     let plan: WorkoutPlan
+    let playlistName: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -119,6 +124,11 @@ private struct PlanRow: View {
                 .foregroundStyle(.secondary)
             if !plan.notes.isEmpty {
                 Text(plan.notes).lineLimit(1).font(.footnote).foregroundStyle(.secondary)
+            }
+            if let playlistName {
+                Label(playlistName, systemImage: "music.note.list")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 4)

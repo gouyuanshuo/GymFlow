@@ -6,6 +6,8 @@ final class ImportedTrack {
     @Attribute(.unique) var id: UUID
     var title: String
     var artist: String
+    var album: String?
+    @Attribute(.externalStorage) var artworkData: Data?
     var storedFileName: String
     var originalFileName: String
     var fileExtension: String
@@ -17,6 +19,8 @@ final class ImportedTrack {
         id: UUID = UUID(),
         title: String,
         artist: String = "",
+        album: String? = nil,
+        artworkData: Data? = nil,
         storedFileName: String,
         originalFileName: String,
         fileExtension: String,
@@ -27,6 +31,8 @@ final class ImportedTrack {
         self.id = id
         self.title = title
         self.artist = artist
+        self.album = album
+        self.artworkData = artworkData
         self.storedFileName = storedFileName
         self.originalFileName = originalFileName
         self.fileExtension = fileExtension

@@ -4,6 +4,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var audioPlayer: AudioPlayerService
+    @Query(sort: \ImportedTrack.sortOrder) private var tracks: [ImportedTrack]
     @State private var selectedTab: AppTab = .today
     @State private var seedingError: String?
 
@@ -24,11 +25,21 @@ struct ContentView: View {
             MusicLibraryView()
                 .tag(AppTab.music)
                 .tabItem { Label("Music", systemImage: "music.note.list") }
+
+            SettingsView(showsDoneButton: false)
+                .tag(AppTab.settings)
+                .tabItem { Label("Settings", systemImage: "gearshape") }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if audioPlayer.currentTrack != nil { MiniPlayerView() }
         }
-        .task { seedInitialData() }
+        .task {
+            seedInitialData()
+            audioPlayer.synchronizeLibrary(tracks)
+        }
+        .onChange(of: tracks.map(\.id)) { _, _ in
+            audioPlayer.synchronizeLibrary(tracks)
+        }
         .alert("Couldn’t Prepare GymFlow", isPresented: Binding(
             get: { seedingError != nil },
             set: { if !$0 { seedingError = nil } }
@@ -53,6 +64,7 @@ enum AppTab: Hashable {
     case plans
     case history
     case music
+    case settings
 }
 
 #Preview {

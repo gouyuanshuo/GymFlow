@@ -6,6 +6,8 @@ final class RestTimerService: NSObject, ObservableObject {
     @Published private(set) var remainingSeconds = 0
     @Published private(set) var isRunning = false
     @Published private(set) var isPaused = false
+    @Published private(set) var didComplete = false
+    @Published private(set) var stateRevision = 0
 
     private var endDate: Date?
     private var pausedRemaining = 0
@@ -14,11 +16,17 @@ final class RestTimerService: NSObject, ObservableObject {
     private let defaults: UserDefaults
     private let keyPrefix: String
     var onCompletion: (() -> Void)?
+    var deadline: Date? { endDate }
 
-    init(defaults: UserDefaults = .standard, keyPrefix: String = "restTimer") {
+    init(
+        defaults: UserDefaults = .standard,
+        keyPrefix: String = "restTimer",
+        migrationKeyPrefix: String? = nil
+    ) {
         self.defaults = defaults
         self.keyPrefix = keyPrefix
         super.init()
+        migrateStateIfNeeded(from: migrationKeyPrefix)
         restore()
     }
 
@@ -28,6 +36,15 @@ final class RestTimerService: NSObject, ObservableObject {
         max(0, Int(ceil(endDate.timeIntervalSince(now))))
     }
 
+    static func clearPersistedState(
+        defaults: UserDefaults = .standard,
+        keyPrefix: String
+    ) {
+        ["endDate", "pausedRemaining", "originalDuration", "isPaused", "didComplete"].forEach {
+            defaults.removeObject(forKey: "\(keyPrefix).\($0)")
+        }
+    }
+
     func start(duration: Int, now: Date = Date()) {
         guard duration > 0 else {
             cancel()
@@ -35,10 +52,13 @@ final class RestTimerService: NSObject, ObservableObject {
         }
         originalDuration = duration
         pausedRemaining = 0
+        didComplete = false
+        defaults.removeObject(forKey: "\(keyPrefix).didComplete")
         endDate = now.addingTimeInterval(TimeInterval(duration))
         remainingSeconds = duration
         isRunning = true
         isPaused = false
+        stateRevision += 1
         persist()
         scheduleTimer()
     }
@@ -51,6 +71,7 @@ final class RestTimerService: NSObject, ObservableObject {
         isRunning = false
         isPaused = pausedRemaining > 0
         timer?.invalidate()
+        stateRevision += 1
         persist()
     }
 
@@ -60,6 +81,7 @@ final class RestTimerService: NSObject, ObservableObject {
         remainingSeconds = pausedRemaining
         isRunning = true
         isPaused = false
+        stateRevision += 1
         persist()
         scheduleTimer()
     }
@@ -72,6 +94,8 @@ final class RestTimerService: NSObject, ObservableObject {
         remainingSeconds = 0
         isRunning = false
         isPaused = false
+        didComplete = false
+        stateRevision += 1
         clearPersistence()
     }
 
@@ -92,10 +116,26 @@ final class RestTimerService: NSObject, ObservableObject {
             start(duration: originalDuration, now: now)
             return
         }
+        stateRevision += 1
         persist()
     }
 
-    func skip() { cancel() }
+    func skip() {
+        timer?.invalidate()
+        timer = nil
+        endDate = nil
+        pausedRemaining = 0
+        remainingSeconds = 0
+        isRunning = false
+        isPaused = false
+        didComplete = true
+        stateRevision += 1
+        clearTimerPersistence()
+        defaults.set(originalDuration, forKey: "\(keyPrefix).originalDuration")
+        defaults.set(true, forKey: "\(keyPrefix).didComplete")
+    }
+
+    func dismissCompletion() { cancel() }
 
     func refresh(now: Date = Date()) {
         guard isRunning, let endDate else { return }
@@ -127,7 +167,11 @@ final class RestTimerService: NSObject, ObservableObject {
         remainingSeconds = 0
         isRunning = false
         isPaused = false
-        clearPersistence()
+        didComplete = true
+        stateRevision += 1
+        clearTimerPersistence()
+        defaults.set(originalDuration, forKey: "\(keyPrefix).originalDuration")
+        defaults.set(true, forKey: "\(keyPrefix).didComplete")
         onCompletion?()
     }
 
@@ -140,6 +184,7 @@ final class RestTimerService: NSObject, ObservableObject {
 
     private func restore(now: Date = Date()) {
         originalDuration = defaults.integer(forKey: "\(keyPrefix).originalDuration")
+        didComplete = defaults.bool(forKey: "\(keyPrefix).didComplete")
         let storedPaused = defaults.bool(forKey: "\(keyPrefix).isPaused")
         if storedPaused {
             pausedRemaining = defaults.integer(forKey: "\(keyPrefix).pausedRemaining")
@@ -153,14 +198,39 @@ final class RestTimerService: NSObject, ObservableObject {
                 isRunning = true
                 scheduleTimer()
             } else {
-                clearPersistence()
+                didComplete = true
+                clearTimerPersistence()
+                defaults.set(originalDuration, forKey: "\(keyPrefix).originalDuration")
+                defaults.set(true, forKey: "\(keyPrefix).didComplete")
             }
         }
     }
 
     private func clearPersistence() {
+        clearTimerPersistence()
+        defaults.removeObject(forKey: "\(keyPrefix).didComplete")
+    }
+
+    private func clearTimerPersistence() {
         ["endDate", "pausedRemaining", "originalDuration", "isPaused"].forEach {
             defaults.removeObject(forKey: "\(keyPrefix).\($0)")
+        }
+    }
+
+    private func migrateStateIfNeeded(from oldPrefix: String?) {
+        guard let oldPrefix, oldPrefix != keyPrefix else { return }
+        let suffixes = ["endDate", "pausedRemaining", "originalDuration", "isPaused", "didComplete"]
+        let alreadyHasState = suffixes.contains {
+            defaults.object(forKey: "\(keyPrefix).\($0)") != nil
+        }
+        guard !alreadyHasState else { return }
+
+        for suffix in suffixes {
+            let oldKey = "\(oldPrefix).\(suffix)"
+            if let value = defaults.object(forKey: oldKey) {
+                defaults.set(value, forKey: "\(keyPrefix).\(suffix)")
+                defaults.removeObject(forKey: oldKey)
+            }
         }
     }
 }

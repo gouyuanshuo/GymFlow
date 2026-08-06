@@ -9,13 +9,16 @@ struct SettingsView: View {
     @Query private var definitions: [ExerciseDefinition]
     @Query private var sessions: [WorkoutSession]
     @Query private var tracks: [ImportedTrack]
+    @Query private var memberships: [PlaylistTrack]
     @AppStorage("defaultRestDuration") private var defaultRestDuration = 90
     @AppStorage("timerSoundEnabled") private var timerSoundEnabled = true
     @AppStorage("hapticFeedbackEnabled") private var hapticFeedbackEnabled = true
+    @AppStorage("automaticallyPlayAssignedPlaylist") private var automaticallyPlayAssignedPlaylist = false
     @State private var resetSampleConfirmation = false
     @State private var deleteWorkoutConfirmation = false
     @State private var deleteAudioConfirmation = false
     @State private var message: SettingsMessage?
+    var showsDoneButton = true
 
     private var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
@@ -27,6 +30,7 @@ struct SettingsView: View {
                 Section("Workout Defaults") {
                     LabeledContent("Weight unit", value: "Kilograms (kg)")
                     Stepper("Default rest: \(defaultRestDuration) seconds", value: $defaultRestDuration, in: 0...900, step: 15)
+                    Toggle("Automatically play assigned playlist", isOn: $automaticallyPlayAssignedPlaylist)
                 }
 
                 Section("Feedback") {
@@ -57,7 +61,9 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { Button("Done") { dismiss() } }
+            .toolbar {
+                if showsDoneButton { Button("Done") { dismiss() } }
+            }
             .confirmationDialog("Reset sample plans?", isPresented: $resetSampleConfirmation, titleVisibility: .visible) {
                 Button("Delete Plans and Restore Samples", role: .destructive) { resetSamples() }
                 Button("Cancel", role: .cancel) { }
@@ -96,6 +102,14 @@ struct SettingsView: View {
     }
 
     private func deleteWorkoutData() {
+        WorkoutLiveActivityService.shared.endAll()
+        sessions.forEach {
+            RestTimerService.clearPersistedState(
+                keyPrefix: "restTimer.\($0.id.uuidString)"
+            )
+        }
+        RestTimerService.clearPersistedState(keyPrefix: "restTimer")
+        UserDefaults.standard.set("", forKey: "activeWorkoutSessionID")
         plans.forEach(modelContext.delete)
         definitions.forEach(modelContext.delete)
         sessions.forEach(modelContext.delete)
@@ -110,7 +124,8 @@ struct SettingsView: View {
     private func deleteAllAudio() {
         do {
             let store = try AudioFileStore()
-            audioPlayer.stop()
+            audioPlayer.clearQueue()
+            memberships.forEach(modelContext.delete)
             for track in tracks {
                 try store.delete(storedFileName: track.storedFileName)
                 modelContext.delete(track)

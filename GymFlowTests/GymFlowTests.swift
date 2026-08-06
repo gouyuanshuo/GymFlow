@@ -1,5 +1,7 @@
 import AVFoundation
 import Foundation
+import MediaPlayer
+import SwiftData
 import Testing
 @testable import GymFlow
 
@@ -27,7 +29,13 @@ struct GymFlowTests {
             targetWeight: 80,
             restSeconds: 180
         )
-        let original = WorkoutPlan(name: "Legs", notes: "Original", exercises: [exercise])
+        let playlistID = UUID()
+        let original = WorkoutPlan(
+            name: "Legs",
+            notes: "Original",
+            assignedPlaylistID: playlistID,
+            exercises: [exercise]
+        )
         let copy = WorkoutService.duplicate(plan: original, now: Date(timeIntervalSince1970: 100))
 
         #expect(copy.id != original.id)
@@ -35,6 +43,7 @@ struct GymFlowTests {
         #expect(copy.exercises.count == 1)
         #expect(copy.exercises[0].id != exercise.id)
         #expect(copy.exercises[0].targetWeight == 80)
+        #expect(copy.assignedPlaylistID == playlistID)
 
         copy.exercises[0].targetWeight = 100
         #expect(original.exercises[0].targetWeight == 80)
@@ -61,16 +70,60 @@ struct GymFlowTests {
         let plan = WorkoutPlan(name: "Back", exercises: [later, first])
         let start = Date(timeIntervalSince1970: 1_000)
 
-        let session = WorkoutService.makeSession(from: plan, now: start)
+        let playlist = Playlist(name: "Back Day")
+        let session = WorkoutService.makeSession(from: plan, playlist: playlist, now: start)
 
         #expect(session.workoutPlanID == plan.id)
         #expect(session.planNameSnapshot == "Back")
         #expect(session.status == .active)
         #expect(session.startedAt == start)
+        #expect(session.currentExerciseIndex == 0)
+        #expect(session.currentSetNumber == 1)
+        #expect(session.playlistID == playlist.id)
+        #expect(session.playlistNameSnapshot == "Back Day")
         #expect(session.orderedExerciseRecords.map(\.exerciseNameSnapshot) == ["Pulldown", "Row"])
         #expect(session.orderedExerciseRecords[0].sets.count == 3)
         #expect(session.orderedExerciseRecords[0].orderedSets[0].weight == 55)
         #expect(session.orderedExerciseRecords[0].orderedSets[0].repetitions == 10)
+    }
+
+    @Test("New sessions prefill the latest completed set and retain target fallbacks")
+    func workoutSessionPreviousValuePrefill() {
+        let exerciseID = UUID()
+        let planned = PlannedExercise(
+            exerciseID: exerciseID,
+            exerciseNameSnapshot: "Bench Press",
+            targetSets: 2,
+            targetRepetitions: 8,
+            targetWeight: 60
+        )
+        let plan = WorkoutPlan(name: "Chest", exercises: [planned])
+        let previousRecord = ExerciseRecord(
+            exerciseID: exerciseID,
+            exerciseNameSnapshot: "Bench Press",
+            sets: [
+                WorkoutSetRecord(
+                    setNumber: 1,
+                    weight: 72.5,
+                    repetitions: 6,
+                    isCompleted: true
+                ),
+                WorkoutSetRecord(setNumber: 2, weight: 70, repetitions: 7)
+            ]
+        )
+        let previous = WorkoutSession(
+            planNameSnapshot: "Chest",
+            startedAt: Date(timeIntervalSince1970: 500),
+            status: .completed,
+            exerciseRecords: [previousRecord]
+        )
+
+        let session = WorkoutService.makeSession(from: plan, previousSessions: [previous])
+        let sets = session.orderedExerciseRecords[0].orderedSets
+        #expect(sets[0].weight == 72.5)
+        #expect(sets[0].repetitions == 6)
+        #expect(sets[1].weight == 60)
+        #expect(sets[1].repetitions == 8)
     }
 
     @Test("Historical snapshots survive plan changes")
@@ -96,6 +149,56 @@ struct GymFlowTests {
         #expect(RestTimerService.remaining(until: now.addingTimeInterval(-5), now: now) == 0)
     }
 
+    @Test("Rest timer restores paused state and uses elapsed wall time")
+    func restTimerPersistenceAndRecovery() {
+        let suiteName = "GymFlowTests.RestTimer.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            Issue.record("Could not create isolated UserDefaults")
+            return
+        }
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let start = Date(timeIntervalSince1970: 1_000)
+        let running = RestTimerService(defaults: defaults, keyPrefix: "testTimer")
+        running.start(duration: 120, now: start)
+        running.refresh(now: start.addingTimeInterval(40))
+        #expect(running.remainingSeconds == 80)
+
+        running.pause(now: start.addingTimeInterval(40))
+        let restored = RestTimerService(defaults: defaults, keyPrefix: "testTimer")
+        #expect(restored.isPaused)
+        #expect(restored.remainingSeconds == 80)
+
+        restored.resume(now: start.addingTimeInterval(100))
+        restored.refresh(now: start.addingTimeInterval(130))
+        #expect(restored.remainingSeconds == 50)
+    }
+
+    @Test("Rest timer migrates an interrupted workout from the legacy storage key")
+    func restTimerStorageMigration() {
+        let suiteName = "GymFlowTests.RestTimerMigration.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            Issue.record("Could not create isolated UserDefaults")
+            return
+        }
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let start = Date(timeIntervalSince1970: 1_000)
+        let legacy = RestTimerService(defaults: defaults, keyPrefix: "restTimer")
+        legacy.start(duration: 90, now: start)
+        legacy.pause(now: start.addingTimeInterval(20))
+
+        let restored = RestTimerService(
+            defaults: defaults,
+            keyPrefix: "restTimer.session-id",
+            migrationKeyPrefix: "restTimer"
+        )
+        #expect(restored.isPaused)
+        #expect(restored.remainingSeconds == 70)
+        #expect(defaults.object(forKey: "restTimer.pausedRemaining") == nil)
+        #expect(defaults.integer(forKey: "restTimer.session-id.pausedRemaining") == 70)
+    }
+
     @Test("Audio destinations do not overwrite existing imports")
     func audioFileDestinationNaming() {
         let existing: Set<String> = ["Workout Mix.mp3", "Workout Mix-2.mp3"]
@@ -108,6 +211,78 @@ struct GymFlowTests {
             originalFileName: "New Song.m4a",
             existingNames: existing
         ) == "New Song.m4a")
+    }
+
+    @Test("Playlist CRUD preserves shared imported tracks and ordering")
+    func playlistManagement() throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: ImportedTrack.self, Playlist.self, PlaylistTrack.self,
+            WorkoutPlan.self, PlannedExercise.self,
+            configurations: configuration
+        )
+        let context = ModelContext(container)
+        let first = ImportedTrack(
+            title: "First",
+            storedFileName: "first.mp3",
+            originalFileName: "first.mp3",
+            fileExtension: "mp3"
+        )
+        let second = ImportedTrack(
+            title: "Second",
+            storedFileName: "second.mp3",
+            originalFileName: "second.mp3",
+            fileExtension: "mp3"
+        )
+        context.insert(first)
+        context.insert(second)
+
+        let playlist = try PlaylistService.create(name: "Training", playlists: [], context: context)
+        let assignedPlan = WorkoutPlan(name: "Assigned", assignedPlaylistID: playlist.id)
+        context.insert(assignedPlan)
+        try PlaylistService.add(
+            trackIDs: [second.id, first.id],
+            to: playlist,
+            memberships: [],
+            context: context
+        )
+        let memberships = try context.fetch(FetchDescriptor<PlaylistTrack>())
+        #expect(PlaylistService.orderedTracks(
+            for: playlist.id,
+            memberships: memberships,
+            tracks: [first, second]
+        ).map(\.title) == ["Second", "First"])
+
+        let copy = try PlaylistService.duplicate(
+            playlist,
+            playlists: [playlist],
+            memberships: memberships,
+            context: context
+        )
+        let membershipsAfterCopy = try context.fetch(FetchDescriptor<PlaylistTrack>())
+        #expect(copy.name == "Training Copy")
+        #expect(membershipsAfterCopy.filter { $0.playlistID == copy.id }.count == 2)
+
+        try PlaylistService.delete(
+            playlist,
+            memberships: membershipsAfterCopy,
+            assignedPlans: [assignedPlan],
+            context: context
+        )
+        #expect(try context.fetchCount(FetchDescriptor<ImportedTrack>()) == 2)
+        #expect(try context.fetchCount(FetchDescriptor<Playlist>()) == 1)
+        #expect(assignedPlan.assignedPlaylistID == nil)
+    }
+
+    @Test("Playlist names are validated")
+    func playlistValidation() throws {
+        #expect(throws: PlaylistError.emptyName) {
+            try PlaylistService.validatedName("  ", playlists: [])
+        }
+        let existing = Playlist(name: "Cardio")
+        #expect(throws: PlaylistError.duplicateName) {
+            try PlaylistService.validatedName("cardio", playlists: [existing])
+        }
     }
 
     @Test("FLAC is accepted as a supported local audio format")
@@ -139,6 +314,54 @@ struct GymFlowTests {
         #expect(FileManager.default.fileExists(atPath: store.fileURL(for: imported.storedFileName).path))
     }
 
+    @Test("Audio service creates complete Now Playing metadata")
+    func nowPlayingMetadata() {
+        let track = ImportedTrack(
+            title: "Control Center",
+            artist: "GymFlow Tests",
+            album: "Integration",
+            storedFileName: "control-center.flac",
+            originalFileName: "Control Center.flac",
+            fileExtension: "flac",
+            duration: 180
+        )
+        let info = AudioPlayerService.makeNowPlayingInfo(
+            track: track,
+            queueName: "Test Queue",
+            duration: 180,
+            progress: 42,
+            isPlaying: true
+        )
+        #expect(info[MPMediaItemPropertyTitle] as? String == "Control Center")
+        #expect(info[MPMediaItemPropertyArtist] as? String == "GymFlow Tests")
+        #expect(info[MPMediaItemPropertyAlbumTitle] as? String == "Integration")
+        #expect(info[MPNowPlayingInfoPropertyElapsedPlaybackTime] as? TimeInterval == 42)
+        #expect(info[MPNowPlayingInfoPropertyPlaybackRate] as? Double == 1)
+        #expect(info[MPMediaItemPropertyArtwork] is MPMediaItemArtwork)
+    }
+
+    @Test("Live Activity state is compact and round-trips")
+    func liveActivityPayload() throws {
+        let state = WorkoutActivityAttributes.ContentState(
+            exerciseName: "Barbell Bench Press",
+            currentSet: 3,
+            totalSets: 4,
+            completedExercises: 1,
+            totalExercises: 5,
+            workoutStartDate: Date(timeIntervalSince1970: 1_000),
+            restEndDate: Date(timeIntervalSince1970: 1_180),
+            pausedRestSeconds: 0,
+            restComplete: false
+        )
+        let data = try JSONEncoder().encode(state)
+        let restored = try JSONDecoder().decode(
+            WorkoutActivityAttributes.ContentState.self,
+            from: data
+        )
+        #expect(restored == state)
+        #expect(data.count < 4_096)
+    }
+
     private func writeSilentFLAC(to url: URL) throws {
         let sampleRate = 44_100.0
         let settings: [String: Any] = [
@@ -159,13 +382,13 @@ struct GymFlowTests {
     @Test("Playlist navigation handles boundaries and repeat")
     func playlistNextAndPrevious() {
         #expect(PlaylistEngine.nextIndex(
-            current: 0, count: 3, shuffle: false, repeatMode: .off, automatic: true
+            current: 0, count: 3, repeatMode: .off, automatic: true
         ) == 1)
         #expect(PlaylistEngine.nextIndex(
-            current: 2, count: 3, shuffle: false, repeatMode: .off, automatic: true
+            current: 2, count: 3, repeatMode: .off, automatic: true
         ) == nil)
         #expect(PlaylistEngine.nextIndex(
-            current: 2, count: 3, shuffle: false, repeatMode: .all, automatic: true
+            current: 2, count: 3, repeatMode: .all, automatic: true
         ) == 0)
         #expect(PlaylistEngine.previousIndex(current: 0, count: 3) == 2)
         #expect(PlaylistEngine.previousIndex(current: 2, count: 3) == 1)
@@ -174,21 +397,38 @@ struct GymFlowTests {
     @Test("Playlist repeat-one and deterministic shuffle are testable")
     func shuffleAndRepeatLogic() {
         #expect(PlaylistEngine.nextIndex(
-            current: 1, count: 4, shuffle: false, repeatMode: .one, automatic: true
+            current: 1, count: 4, repeatMode: .one, automatic: true
         ) == 1)
-        let shuffled = PlaylistEngine.nextIndex(
-            current: 1,
-            count: 4,
+        let ids = (0..<4).map { _ in UUID() }
+        let shuffled = PlaylistEngine.makeQueue(
+            sourceTrackIDs: ids,
             shuffle: true,
-            repeatMode: .off,
-            automatic: true,
-            randomIndex: { _ in 1 }
+            currentTrackID: ids[1],
+            shuffler: { $0.reversed() }
         )
-        #expect(shuffled == 2)
-        #expect(shuffled != 1)
+        #expect(shuffled == [ids[1], ids[3], ids[2], ids[0]])
+        #expect(Set(shuffled).count == ids.count)
         #expect(RepeatMode.off.next == .one)
         #expect(RepeatMode.one.next == .all)
         #expect(RepeatMode.all.next == .off)
+    }
+
+    @Test("Playback snapshot preserves queue context")
+    func playbackSnapshotPersistence() throws {
+        let ids = [UUID(), UUID(), UUID()]
+        let snapshot = PlaybackSnapshot(
+            sourceTrackIDs: ids,
+            queueTrackIDs: [ids[1], ids[2], ids[0]],
+            currentTrackID: ids[2],
+            currentTime: 42.5,
+            queueName: "Workout",
+            playlistID: UUID(),
+            shuffleEnabled: true,
+            repeatMode: .all
+        )
+        let encoded = try JSONEncoder().encode(snapshot)
+        let restored = try JSONDecoder().decode(PlaybackSnapshot.self, from: encoded)
+        #expect(restored == snapshot)
     }
 
     @Test("Validation rejects invalid plan and target values")
