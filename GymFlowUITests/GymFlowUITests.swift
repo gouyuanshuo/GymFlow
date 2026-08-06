@@ -16,7 +16,12 @@ final class GymFlowUITests: XCTestCase {
             resume.tap()
         } else {
             XCTAssertTrue(start.waitForExistence(timeout: 10))
-            start.tap()
+            if start.isEnabled {
+                start.tap()
+            } else {
+                XCTAssertTrue(resume.waitForExistence(timeout: 5))
+                resume.tap()
+            }
         }
 
         let completeSet = app.buttons["Complete set 1"]

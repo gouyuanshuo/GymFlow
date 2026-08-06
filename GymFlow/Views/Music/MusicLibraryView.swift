@@ -17,7 +17,7 @@ struct MusicLibraryView: View {
                     ContentUnavailableView {
                         Label("No Imported Music", systemImage: "music.note.list")
                     } description: {
-                        Text("Import unprotected MP3, M4A, AAC, WAV, AIFF, or CAF audio from Files.")
+                        Text("Import unprotected MP3, M4A, AAC, WAV, AIFF, CAF, or FLAC audio from Files.")
                     } actions: {
                         Button("Import Audio", systemImage: "square.and.arrow.down") {
                             importerPresented = true

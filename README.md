@@ -61,7 +61,7 @@ xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS
 ## Current limitations
 
 - Background playback is configured through the playback audio session and `UIBackgroundModes`; lock-screen/Control Center metadata and remote commands are not part of this release.
-- Audio is intentionally limited to unprotected local files supported by AVFoundation. Artist metadata is not extracted in this release, so GymFlow displays a clear fallback when it is unavailable.
+- Audio import supports unprotected local MP3, M4A, AAC, WAV, AIFF, CAF, and FLAC files playable by AVFoundation. Artist metadata is not extracted in this release, so GymFlow displays a clear fallback when it is unavailable.
 - Exercise progress prioritizes accurate lists and aggregates; charts and personal-record detection are not included.
 - The primary layout is portrait iPhone; iPad-specific layout is outside first-release scope.
 - Timer completion feedback uses an in-app system sound/haptic and is not a scheduled local notification while the app is terminated.

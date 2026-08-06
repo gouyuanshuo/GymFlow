@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Testing
 @testable import GymFlow
@@ -107,6 +108,52 @@ struct GymFlowTests {
             originalFileName: "New Song.m4a",
             existingNames: existing
         ) == "New Song.m4a")
+    }
+
+    @Test("FLAC is accepted as a supported local audio format")
+    func flacImportSupport() {
+        #expect(AudioFileStore.supportedExtensions.contains("flac"))
+        #expect(AudioFileStore.availableDestinationFileName(
+            originalFileName: "Workout Mix.FLAC",
+            existingNames: []
+        ) == "Workout Mix.flac")
+    }
+
+    @Test("A FLAC file can be copied and decoded")
+    func flacFileImportAndDecode() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GymFlow-FLAC-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appendingPathComponent("Test Track.FLAC")
+        try writeSilentFLAC(to: source)
+
+        let destination = root.appendingPathComponent("Imported", isDirectory: true)
+        let store = try AudioFileStore(directoryURL: destination)
+        let imported = try store.importAudio(from: source)
+
+        #expect(imported.fileExtension == "flac")
+        #expect(imported.storedFileName == "Test Track.flac")
+        #expect(imported.duration != nil)
+        #expect(FileManager.default.fileExists(atPath: store.fileURL(for: imported.storedFileName).path))
+    }
+
+    private func writeSilentFLAC(to url: URL) throws {
+        let sampleRate = 44_100.0
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatFLAC,
+            AVSampleRateKey: sampleRate,
+            AVNumberOfChannelsKey: 1,
+            AVLinearPCMBitDepthKey: 16
+        ]
+        let file = try AVAudioFile(forWriting: url, settings: settings)
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1),
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4_410) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        buffer.frameLength = 4_410
+        try file.write(from: buffer)
     }
 
     @Test("Playlist navigation handles boundaries and repeat")
