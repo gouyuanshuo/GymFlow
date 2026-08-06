@@ -3,6 +3,12 @@ import Foundation
 
 @MainActor
 final class RestTimerService: NSObject, ObservableObject {
+    struct ActivityState: Equatable {
+        let deadline: Date?
+        let pausedSeconds: Int
+        let didComplete: Bool
+    }
+
     @Published private(set) var remainingSeconds = 0
     @Published private(set) var isRunning = false
     @Published private(set) var isPaused = false
@@ -43,6 +49,31 @@ final class RestTimerService: NSObject, ObservableObject {
         ["endDate", "pausedRemaining", "originalDuration", "isPaused", "didComplete"].forEach {
             defaults.removeObject(forKey: "\(keyPrefix).\($0)")
         }
+    }
+
+    static func persistedActivityState(
+        defaults: UserDefaults = .standard,
+        keyPrefix: String,
+        now: Date = Date()
+    ) -> ActivityState {
+        if defaults.bool(forKey: "\(keyPrefix).isPaused") {
+            return ActivityState(
+                deadline: nil,
+                pausedSeconds: max(0, defaults.integer(forKey: "\(keyPrefix).pausedRemaining")),
+                didComplete: false
+            )
+        }
+        if let deadline = defaults.object(forKey: "\(keyPrefix).endDate") as? Date {
+            if remaining(until: deadline, now: now) > 0 {
+                return ActivityState(deadline: deadline, pausedSeconds: 0, didComplete: false)
+            }
+            return ActivityState(deadline: nil, pausedSeconds: 0, didComplete: true)
+        }
+        return ActivityState(
+            deadline: nil,
+            pausedSeconds: 0,
+            didComplete: defaults.bool(forKey: "\(keyPrefix).didComplete")
+        )
     }
 
     func start(duration: Int, now: Date = Date()) {

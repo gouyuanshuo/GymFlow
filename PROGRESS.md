@@ -3,10 +3,146 @@
 ## Current status
 
 - Completed: first-release Milestones 0–8 and continuous-experience Upgrade Milestones 1–9.
-- Current work: complete; repository is left in a clean-buildable state with device-only acceptance items documented.
-- Next action: pair the physical iPhone and perform the background-audio, remote-control, interruption, and Live Activity acceptance pass.
+- Completed: root-layout bug fix and defensive Live Activity lifecycle implementation with unit/UI verification.
+- Current work: final clean/device build and physical-iPhone verification.
+- Next action: reconnect the paired iPhone, install the signed main app, and perform the tab/Dynamic Island acceptance pass.
 
 ## Engineering log
+
+### 2026-08-06 — Launch-time Music Error fix
+
+- Root cause: `AudioPlayerService` configured the `.playback` audio-session category with an explicit `.allowAirPlay` option. Apple only permits that option to be explicitly combined with `.playAndRecord`; playback categories already receive AirPlay support implicitly. The invalid combination threw `AVAudioSession.ErrorCode.badParam` (`OSStatus -50`) at every service initialization, and `MusicLibraryView` presented the retained launch error when its tab became active.
+- Removed the invalid option and limited launch-time setup to `setCategory(.playback, mode: .default)`. Audio-session activation is now deferred until play/resume, and a successful activation clears any prior transient playback error.
+- Added a launch-configuration regression test that verifies the shared service selects `.playback` without setting `lastError`. No imported file paths or persisted track records changed.
+
+Build command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowAudioSessionFixDerivedData CODE_SIGNING_ALLOWED=NO build -quiet
+```
+
+Build result: exit 0, **BUILD SUCCEEDED**.
+
+Unit-test command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=30393FFE-FE4E-4706-9E61-78D23C7D1044' -derivedDataPath /tmp/GymFlowAudioSessionFixTestsDerivedData CODE_SIGNING_ALLOWED=NO -only-testing:GymFlowTests -parallel-testing-enabled NO test -quiet
+```
+
+Test result: exit 0, **27/27 tests passed** with zero failures or skips.
+
+### 2026-08-06 — GymFlow app icon
+
+- Created and approved an original high-contrast angular `G` monogram for GymFlow, inspired by bold monochrome geometric app branding without reproducing the X mark.
+- Saved the 1024×1024, opaque PNG source at `Design/GymFlow-AppIcon-G-Concept.png` and installed it in the universal iOS AppIcon asset slot as `GymFlow/Assets.xcassets/AppIcon.appiconset/GymFlow-AppIcon.png`.
+- Kept the artwork full bleed and square so iOS supplies the platform-specific corner mask.
+
+Verification command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowIconDerivedData CODE_SIGNING_ALLOWED=NO build -quiet
+```
+
+Result: exit 0, **BUILD SUCCEEDED** with no asset-catalog errors.
+
+### 2026-08-06 — Mini-player and Live Activity bug-fix baseline
+
+- Read the project guidance and audited the main app hierarchy, shared player, both mini-player placements, active-session persistence, ActivityKit service, Widget Extension, tests, SDK declarations, and installed destinations.
+- Root cause 1: `ContentView` applies a bottom `safeAreaInset` to the entire native `TabView`. On the installed iOS 26 SDK this is outside the tab accessory contract and can occupy the tab bar's interaction region. `ActiveWorkoutView` also creates a second mini-player instead of coordinating visibility with the root player.
+- Root cause 2: the activity service only reacts to workout-view events. It does not reconcile on app launch/foreground, persist the ActivityKit identifier, or remove duplicates/orphans. Its `staleDate` is `restEndDate + 300` and is nil when no rest is running, so force termination can leave an expired countdown rendered as `0:00` with no process available to update it.
+- Confirmed Xcode 26.6, iOS SDK 26.5, iOS 17.0 deployment target, `tabViewBottomAccessory` availability from iOS 26.0, main scheme `GymFlow`, and an online physical iPhone `nv` running iOS 26.5.2.
+
+Baseline command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowBugfixBaselineDerivedData CODE_SIGNING_ALLOWED=NO clean build -quiet
+```
+
+Baseline result: exit 0, **CLEAN BUILD SUCCEEDED**.
+
+### 2026-08-06 — Mini-player hierarchy and lifecycle implementation
+
+- Replaced the iOS 26 root `safeAreaInset` with `tabViewBottomAccessory`, retaining a safe-area-reserving fallback for iOS 17–25. The player is now a compact 56-point-minimum material bar with one-line metadata and independent 44-point transport targets.
+- Added a presentation policy so the root player is hidden while the full-screen workout owns its player; the active workout never renders two mini-players and dismissing Now Playing/workout presentation preserves shared audio and workout state.
+- Replaced `WorkoutLiveActivityService` with `LiveActivityManager`. It discovers all GymFlow activities, keeps one persisted matching activity, ends duplicates/orphans immediately, records activity/session/start/update metadata, and logs start/update/end/reconciliation outcomes.
+- Added launch and foreground reconciliation against SwiftData. The persisted `WorkoutSession` remains authoritative. Missing, inconsistent, duplicate, future-dated, and eight-hour-expired active sessions are cancelled and their timers/activities are cleared; a valid session is restored and updated.
+- Added an eight-hour workout validity horizon and shared display-state policy. Active rest shows its deadline countdown, ordinary training shows set progress such as `3/4`, completed rest shows Ready, and expired content shows “Workout status unavailable / Open GymFlow” instead of `0:00`.
+- Normal finish, cancel, and destructive workout-data deletion end matching activities with immediate dismissal. Backgrounding alone does not end a valid workout activity.
+
+Mini-player build command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowMiniPlayerDerivedData CODE_SIGNING_ALLOWED=NO build -quiet
+```
+
+Result: exit 0, **BUILD SUCCEEDED**.
+
+Lifecycle build command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowLiveActivityDerivedData CODE_SIGNING_ALLOWED=NO build -quiet
+```
+
+Result: exit 0, **BUILD SUCCEEDED**, including the Widget Extension.
+
+Unit-test command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=30393FFE-FE4E-4706-9E61-78D23C7D1044' -derivedDataPath /tmp/GymFlowBugfixUnitFinalDerivedData CODE_SIGNING_ALLOWED=NO -only-testing:GymFlowTests -parallel-testing-enabled NO test -quiet
+```
+
+Result: exit 0; all **26 unit tests passed**, including mini-player visibility/shared-queue behavior, no-session cleanup, matching preservation, duplicate cleanup, completed/cancelled/expired invalidation, and rest/training/stale presentation.
+
+Critical UI-test command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=30393FFE-FE4E-4706-9E61-78D23C7D1044' -derivedDataPath /tmp/GymFlowBugfixUIOnlyDerivedData CODE_SIGNING_ALLOWED=NO -only-testing:GymFlowUITests/GymFlowUITests/testStartSetTimerAndCancelWorkout -parallel-testing-enabled NO test -quiet
+```
+
+Result: exit 0. The test cancels any interrupted prior session, starts a fresh workout, completes a set, confirms automatic rest timing across Home/foreground, confirms minimize/resume at set 2, and cancels cleanly. The first run exposed persisted test state that made the old test assume set 1 was incomplete; the test now normalizes that state. A later run exposed duplicate SwiftUI accessibility nodes in the confirmation dialog; distinct action identifiers plus `firstMatch` fixed the query. Xcode continues to emit its non-fatal local `DebuggerVersionStore: no debugger version` warning.
+
+Physical-device status: iPhone `nv` (iOS 26.5.2, UDID `00008120-001479921160201E`) was online during the baseline audit but became unavailable before installation. Signed install, tab tapping with the user’s imported audio, Dynamic Island finish/cancel, background, and force-quit observations remain pending until it reconnects.
+
+Force-quit limitation: iOS does not guarantee execution of app cleanup after the App Switcher termination gesture. GymFlow cannot promise removal at that exact moment without a server. It now explicitly ends activities whenever the process can do so, reconciles on launch/foreground, and ensures a killed app cannot leave a normal-looking `0:00` status indefinitely; the eight-hour stale/system lifetime remains subject to ActivityKit’s dismissal scheduling.
+
+### 2026-08-06 — Bug-fix final verification
+
+- Moved persisted-session selection, invalidation, timer snapshot recovery, and SwiftData saving out of `ContentView` into `LiveActivityManager`; the root view now only triggers reconciliation on launch/foreground and publishes the returned active-session identifier.
+- Re-ran the complete main-scheme test plan after that final architecture change. The result bundle reports 28 logical tests and zero failures (29 passed invocations because the launch test runs with two dynamic UI configurations).
+- Re-ran a clean main-app simulator build and a signed generic arm64 iPhone build. Both the app and Widget Extension are signed by `Apple Development: gouyuanshuo@gmail.com (R78UBD8UC7)`, team `B576S877F5`.
+- Inspected the signed product: `UIBackgroundModes` contains only `audio`, `NSSupportsLiveActivities` is true, and the extension remains embedded.
+
+Complete test command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=30393FFE-FE4E-4706-9E61-78D23C7D1044' -derivedDataPath /tmp/GymFlowBugfixAllTestsDerivedData CODE_SIGNING_ALLOWED=NO -parallel-testing-enabled NO test -quiet
+```
+
+Result: exit 0, **TEST SUCCEEDED**; 28 logical tests, zero failures, zero skips. Xcode emitted the non-fatal local LLDB version-store warning during UI launches.
+
+Final clean simulator command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowBugfixFinalCleanDerivedData CODE_SIGNING_ALLOWED=NO clean build -quiet
+```
+
+Result: exit 0, **CLEAN BUILD SUCCEEDED**.
+
+Signed device-architecture command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphoneos -configuration Debug -destination 'generic/platform=iOS' -derivedDataPath /tmp/GymFlowBugfixSignedDeviceDerivedData build -quiet
+```
+
+Result: exit 0, **SIGNED BUILD SUCCEEDED**.
+
+Physical install attempt:
+
+```bash
+xcrun devicectl device install app --device 00008120-001479921160201E --timeout 20 /tmp/GymFlowBugfixSignedDeviceDerivedData/Build/Products/Debug-iphoneos/GymFlow.app
+```
+
+Result: exit 1; CoreDevice could not locate the paired iPhone because its tunnel state is unavailable. The device remains paired with Developer Mode enabled, but is currently offline. No physical UI, background, Dynamic Island, or force-quit observation is claimed.
 
 ### 2026-08-06 — Continuous workout/music upgrade baseline
 

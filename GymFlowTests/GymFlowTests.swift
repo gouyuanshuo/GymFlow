@@ -340,8 +340,30 @@ struct GymFlowTests {
         #expect(info[MPMediaItemPropertyArtwork] is MPMediaItemArtwork)
     }
 
+    @Test("Audio service configures playback without a launch error")
+    func audioSessionLaunchConfiguration() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GymFlow-AudioSession-\(UUID().uuidString)", isDirectory: true)
+        let suiteName = "GymFlowTests.AudioSession.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            Issue.record("Could not create isolated UserDefaults")
+            return
+        }
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+            try? FileManager.default.removeItem(at: root)
+        }
+
+        let store = try AudioFileStore(directoryURL: root)
+        let audioPlayer = AudioPlayerService(defaults: defaults, fileStore: store)
+
+        #expect(audioPlayer.lastError == nil)
+        #expect(AVAudioSession.sharedInstance().category == .playback)
+    }
+
     @Test("Live Activity state is compact and round-trips")
     func liveActivityPayload() throws {
+        let expiration = Date(timeIntervalSince1970: 29_800)
         let state = WorkoutActivityAttributes.ContentState(
             exerciseName: "Barbell Bench Press",
             currentSet: 3,
@@ -351,7 +373,8 @@ struct GymFlowTests {
             workoutStartDate: Date(timeIntervalSince1970: 1_000),
             restEndDate: Date(timeIntervalSince1970: 1_180),
             pausedRestSeconds: 0,
-            restComplete: false
+            restComplete: false,
+            workoutExpiresAt: expiration
         )
         let data = try JSONEncoder().encode(state)
         let restored = try JSONDecoder().decode(
@@ -360,6 +383,227 @@ struct GymFlowTests {
         )
         #expect(restored == state)
         #expect(data.count < 4_096)
+    }
+
+    @Test("Mini-player is visible only when its shared track is loaded")
+    func miniPlayerVisibility() {
+        #expect(!MiniPlayerPresentationPolicy.showsGlobalPlayer(
+            hasLoadedTrack: false,
+            isWorkoutPresented: false
+        ))
+        #expect(MiniPlayerPresentationPolicy.showsGlobalPlayer(
+            hasLoadedTrack: true,
+            isWorkoutPresented: false
+        ))
+        #expect(!MiniPlayerPresentationPolicy.showsGlobalPlayer(
+            hasLoadedTrack: true,
+            isWorkoutPresented: true
+        ))
+        #expect(MiniPlayerPresentationPolicy.showsWorkoutPlayer(
+            hasLoadedTrack: true,
+            isWorkoutPresented: true
+        ))
+        #expect(!MiniPlayerPresentationPolicy.showsWorkoutPlayer(
+            hasLoadedTrack: false,
+            isWorkoutPresented: true
+        ))
+    }
+
+    @Test("The shared audio service retains its queue across tab selection")
+    func sharedAudioAcrossTabSelection() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GymFlow-MiniPlayer-\(UUID().uuidString)", isDirectory: true)
+        let suiteName = "GymFlowTests.MiniPlayer.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            Issue.record("Could not create isolated UserDefaults")
+            return
+        }
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+            try? FileManager.default.removeItem(at: root)
+        }
+
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appendingPathComponent("Shared Track.flac")
+        try writeSilentFLAC(to: source)
+        let store = try AudioFileStore(directoryURL: root.appendingPathComponent("Imported"))
+        let imported = try store.importAudio(from: source)
+        let track = ImportedTrack(
+            title: imported.title,
+            artist: imported.artist,
+            storedFileName: imported.storedFileName,
+            originalFileName: imported.originalFileName,
+            fileExtension: imported.fileExtension,
+            duration: imported.duration
+        )
+        let audioPlayer = AudioPlayerService(defaults: defaults, fileStore: store)
+        audioPlayer.setQueue([track], autoplay: false)
+
+        var selectedTab = AppTab.today
+        for tab in [AppTab.today, .plans, .history, .music, .settings] {
+            selectedTab = tab
+            #expect(audioPlayer.playlist.map(\.id) == [track.id])
+        }
+        #expect(selectedTab == .settings)
+    }
+
+    @Test("No active workout terminates every existing activity")
+    func noWorkoutEndsActivities() {
+        let firstSessionID = UUID()
+        let secondSessionID = UUID()
+        let plan = WorkoutActivityReconciler.plan(
+            session: nil,
+            activities: [
+                ExistingWorkoutActivity(activityID: "first", sessionID: firstSessionID),
+                ExistingWorkoutActivity(activityID: "second", sessionID: secondSessionID)
+            ],
+            persistedActivityID: "first",
+            now: Date(timeIntervalSince1970: 10_000)
+        )
+
+        #expect(plan.activityIDsToEnd == ["first", "second"])
+        #expect(plan.invalidReason == .noActiveWorkout)
+        #expect(!plan.shouldStartActivity)
+    }
+
+    @Test("A matching activity is preserved and duplicate activities are removed")
+    func matchingActivityAndDuplicateCleanup() {
+        let now = Date(timeIntervalSince1970: 10_000)
+        let session = makeActivitySession(startedAt: now.addingTimeInterval(-600))
+        let unrelatedSessionID = UUID()
+        let plan = WorkoutActivityReconciler.plan(
+            session: session,
+            activities: [
+                ExistingWorkoutActivity(activityID: "duplicate", sessionID: session.sessionID),
+                ExistingWorkoutActivity(activityID: "matching", sessionID: session.sessionID),
+                ExistingWorkoutActivity(activityID: "orphan", sessionID: unrelatedSessionID)
+            ],
+            persistedActivityID: "matching",
+            now: now
+        )
+
+        #expect(plan.activityIDToKeep == "matching")
+        #expect(plan.activityIDsToEnd == ["duplicate", "orphan"])
+        #expect(plan.shouldUpdateActivity)
+        #expect(!plan.shouldStartActivity)
+    }
+
+    @Test("Completed and cancelled workouts terminate their activities")
+    func inactiveWorkoutsEndActivities() {
+        let now = Date(timeIntervalSince1970: 10_000)
+        for disposition in [
+            WorkoutActivitySessionDisposition.completed,
+            WorkoutActivitySessionDisposition.cancelled
+        ] {
+            let session = makeActivitySession(
+                disposition: disposition,
+                startedAt: now.addingTimeInterval(-600)
+            )
+            let plan = WorkoutActivityReconciler.plan(
+                session: session,
+                activities: [ExistingWorkoutActivity(
+                    activityID: "activity",
+                    sessionID: session.sessionID
+                )],
+                persistedActivityID: "activity",
+                now: now
+            )
+            #expect(plan.invalidReason == .inactiveWorkout)
+            #expect(plan.activityIDsToEnd == ["activity"])
+        }
+    }
+
+    @Test("A workout older than the maximum lifetime is invalid")
+    func expiredWorkoutEndsActivity() {
+        let now = Date(timeIntervalSince1970: 50_000)
+        let session = makeActivitySession(
+            startedAt: now.addingTimeInterval(-WorkoutActivityPolicy.maximumDuration)
+        )
+        let plan = WorkoutActivityReconciler.plan(
+            session: session,
+            activities: [ExistingWorkoutActivity(
+                activityID: "expired",
+                sessionID: session.sessionID
+            )],
+            persistedActivityID: "expired",
+            now: now
+        )
+
+        #expect(plan.invalidReason == .expiredWorkout)
+        #expect(plan.activityIDsToEnd == ["expired"])
+    }
+
+    @Test("Live Activity status distinguishes rest, training, and stale content")
+    func liveActivityDisplayState() {
+        let now = Date(timeIntervalSince1970: 10_000)
+        var state = makeActivityContentState(
+            now: now,
+            restEndDate: now.addingTimeInterval(90)
+        )
+        #expect(WorkoutActivityPolicy.displayState(
+            for: state,
+            isStale: false,
+            now: now
+        ) == .resting(endDate: now.addingTimeInterval(90)))
+        #expect(WorkoutActivityPolicy.nextStaleDate(for: state) == now.addingTimeInterval(90))
+
+        state.restEndDate = nil
+        #expect(WorkoutActivityPolicy.displayState(
+            for: state,
+            isStale: false,
+            now: now
+        ) == .training(currentSet: 3, totalSets: 4))
+
+        state.workoutExpiresAt = now.addingTimeInterval(-1)
+        #expect(WorkoutActivityPolicy.displayState(
+            for: state,
+            isStale: true,
+            now: now
+        ) == .stale)
+    }
+
+    private func makeActivitySession(
+        disposition: WorkoutActivitySessionDisposition = .active,
+        startedAt: Date
+    ) -> WorkoutActivitySessionState {
+        let content = makeActivityContentState(now: startedAt, restEndDate: nil)
+        let snapshot = WorkoutActivitySnapshot(
+            exerciseName: content.exerciseName,
+            currentSet: content.currentSet,
+            totalSets: content.totalSets,
+            completedExercises: content.completedExercises,
+            totalExercises: content.totalExercises,
+            workoutStartDate: startedAt,
+            restEndDate: nil,
+            pausedRestSeconds: 0,
+            restComplete: false
+        )
+        return WorkoutActivitySessionState(
+            sessionID: UUID(),
+            workoutName: "Chest Day",
+            disposition: disposition,
+            startedAt: startedAt,
+            hasValidWorkoutData: true,
+            snapshot: snapshot
+        )
+    }
+
+    private func makeActivityContentState(
+        now: Date,
+        restEndDate: Date?
+    ) -> WorkoutActivityAttributes.ContentState {
+        WorkoutActivityAttributes.ContentState(
+            exerciseName: "Barbell Bench Press",
+            currentSet: 3,
+            totalSets: 4,
+            completedExercises: 1,
+            totalExercises: 5,
+            workoutStartDate: now.addingTimeInterval(-600),
+            restEndDate: restEndDate,
+            pausedRestSeconds: 0,
+            restComplete: false,
+            workoutExpiresAt: now.addingTimeInterval(WorkoutActivityPolicy.maximumDuration)
+        )
     }
 
     private func writeSilentFLAC(to url: URL) throws {
