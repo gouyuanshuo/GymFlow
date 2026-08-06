@@ -19,7 +19,7 @@ struct ActiveWorkoutView: View {
     @State private var finishConfirmation = false
     @State private var summaryPresented = false
     @State private var errorMessage: String?
-    private let liveActivity = WorkoutLiveActivityService.shared
+    private let liveActivity = LiveActivityManager.shared
 
     init(session: WorkoutSession) {
         self.session = session
@@ -75,7 +75,12 @@ struct ActiveWorkoutView: View {
                     }
                     .padding()
                 }
-                if audioPlayer.currentTrack != nil { MiniPlayerView() }
+                if MiniPlayerPresentationPolicy.showsWorkoutPlayer(
+                    hasLoadedTrack: audioPlayer.currentTrack != nil,
+                    isWorkoutPresented: true
+                ) {
+                    MiniPlayerView()
+                }
                 bottomControls
             }
             .navigationTitle(session.planNameSnapshot)
@@ -92,12 +97,14 @@ struct ActiveWorkoutView: View {
                         Button("Cancel Workout", systemImage: "xmark.circle", role: .destructive) {
                             cancelConfirmation = true
                         }
+                        .accessibilityIdentifier("cancel-workout-menu-action")
                     }
                 }
             }
             .interactiveDismissDisabled()
             .confirmationDialog("Cancel this workout?", isPresented: $cancelConfirmation, titleVisibility: .visible) {
                 Button("Cancel Workout", role: .destructive) { cancelWorkout() }
+                    .accessibilityIdentifier("confirm-cancel-workout")
                 Button("Keep Working Out", role: .cancel) { }
             } message: { Text("Completed set data will be retained as a cancelled session.") }
             .confirmationDialog("Finish this workout?", isPresented: $finishConfirmation, titleVisibility: .visible) {

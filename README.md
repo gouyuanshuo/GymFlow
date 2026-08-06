@@ -20,7 +20,7 @@ No user accounts, cloud service, analytics, ads, subscriptions, AI, or network b
 
 ## Architecture
 
-GymFlow is a SwiftUI application using SwiftData for persistence. Lightweight view models/workflow services own domain behavior, `RestTimerService` uses deadline math, `AudioPlayerService` owns one AVFoundation player across navigation and system controls, and `AudioFileStore` owns stable local file copies. `WorkoutLiveActivityService` isolates ActivityKit lifecycle work from the workout UI. Historical sessions keep name/value/playlist snapshots so plan changes cannot rewrite history.
+GymFlow is a SwiftUI application using SwiftData for persistence. Lightweight view models/workflow services own domain behavior, `RestTimerService` uses deadline math, `AudioPlayerService` owns one AVFoundation player across navigation and system controls, and `AudioFileStore` owns stable local file copies. On iOS 26 the compact player uses the native tab-bar accessory; iOS 17–25 use a reserving safe-area inset. `LiveActivityManager` isolates ActivityKit lifecycle work, reconciles activities against the persisted workout on launch/foreground, and removes duplicates or orphans. Historical sessions keep name/value/playlist snapshots so plan changes cannot rewrite history.
 
 ## Project structure
 
@@ -65,6 +65,7 @@ xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS
 ## Current limitations
 
 - Background audio, Now Playing metadata, remote commands, and the embedded Live Activity extension compile and install in Simulator, but Lock Screen, Bluetooth, call interruption, and Dynamic Island behavior still require acceptance testing on a paired physical iPhone.
+- iOS does not deliver a guaranteed callback after a user force-quits an app. GymFlow therefore keeps a valid active workout through ordinary backgrounding, ends its activity immediately during normal finish/cancel, reconciles orphaned activities on launch/foreground, and uses an eight-hour validity/stale horizon. After force-quit, exact removal timing is controlled by iOS; an unrefreshed activity changes to an explicit “Workout status unavailable” state instead of remaining an unexplained `0:00`.
 - Audio import supports unprotected local MP3, M4A, AAC, WAV, AIFF, CAF, and FLAC files playable by AVFoundation. Artist, album, and artwork metadata are not extracted during import in this release, so GymFlow uses clear text and artwork fallbacks.
 - Exercise progress prioritizes accurate lists and aggregates; charts and personal-record detection are not included.
 - The primary layout is portrait iPhone; iPad-specific layout is outside first-release scope.

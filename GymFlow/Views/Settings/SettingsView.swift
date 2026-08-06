@@ -102,7 +102,7 @@ struct SettingsView: View {
     }
 
     private func deleteWorkoutData() {
-        WorkoutLiveActivityService.shared.endAll()
+        LiveActivityManager.shared.endAll()
         sessions.forEach {
             RestTimerService.clearPersistedState(
                 keyPrefix: "restTimer.\($0.id.uuidString)"

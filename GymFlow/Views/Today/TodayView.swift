@@ -15,6 +15,11 @@ struct TodayView: View {
     @State private var presentedSession: WorkoutSession?
     @State private var settingsPresented = false
     @State private var errorMessage: String?
+    private let onWorkoutPresentationChanged: (Bool) -> Void
+
+    init(onWorkoutPresentationChanged: @escaping (Bool) -> Void = { _ in }) {
+        self.onWorkoutPresentationChanged = onWorkoutPresentationChanged
+    }
 
     private var selectedPlan: WorkoutPlan? {
         plans.first(where: { $0.id.uuidString == selectedPlanID }) ?? plans.first
@@ -59,7 +64,9 @@ struct TodayView: View {
                 }
             }
             .sheet(isPresented: $settingsPresented) { SettingsView() }
-            .fullScreenCover(item: $presentedSession) { session in
+            .fullScreenCover(item: $presentedSession, onDismiss: {
+                onWorkoutPresentationChanged(false)
+            }) { session in
                 ActiveWorkoutView(session: session)
             }
             .alert("Workout Error", isPresented: errorBinding) {
@@ -129,7 +136,7 @@ struct TodayView: View {
             Text(session.planNameSnapshot).font(.title3.bold())
             Text("Started \(session.startedAt, format: .relative(presentation: .named))")
                 .foregroundStyle(.secondary)
-            Button("Resume Workout") { presentedSession = session }
+            Button("Resume Workout") { presentWorkout(session) }
                 .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -165,7 +172,7 @@ struct TodayView: View {
                     autoplay: automaticallyPlayAssignedPlaylist
                 )
             }
-            presentedSession = session
+            presentWorkout(session)
         } catch {
             modelContext.delete(session)
             errorMessage = "The workout could not be started. \(error.localizedDescription)"
@@ -175,6 +182,11 @@ struct TodayView: View {
     private func assignedPlaylist(for plan: WorkoutPlan) -> Playlist? {
         guard let playlistID = plan.assignedPlaylistID else { return nil }
         return playlists.first(where: { $0.id == playlistID })
+    }
+
+    private func presentWorkout(_ session: WorkoutSession) {
+        onWorkoutPresentationChanged(true)
+        presentedSession = session
     }
 
     private func reconcileActiveSessionIdentity() {

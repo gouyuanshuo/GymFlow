@@ -158,3 +158,41 @@ Acceptance: optional system-surface work does not destabilize the main app; manu
 - [x] Update product documentation, capability instructions, verification results, and known limitations.
 
 Acceptance: all feasible P0 work and stable P1 work build and test successfully, with device-only verification clearly separated.
+
+## Root Layout and Live Activity Lifecycle Fix
+
+### Bug-fix Milestone 1 — Audit and baseline
+
+- [x] Read project guidance and inspect the root `TabView`, every mini-player placement, ActivityKit manager, extension UI, persistence, SDK support, and device availability.
+- [x] Record the mini-player and stale-activity root causes.
+- [x] Run the unchanged `GymFlow` main-scheme baseline build.
+
+Acceptance: both failures are reproduced in code, the iOS 26 accessory API is confirmed, and baseline compilation succeeds.
+
+### Bug-fix Milestone 2 — Native mini-player hierarchy
+
+- [x] Use the native iOS 26 tab accessory with an adaptive pre-iOS-26 fallback.
+- [x] Reserve layout space without offsets or hard-coded tab-bar padding.
+- [x] Prevent simultaneous global/workout mini-players and keep independent transport controls.
+- [x] Add focused visibility/shared-player checks and build the main scheme.
+
+Acceptance: the mini-player is compact and appears above the tab bar while tabs and workout controls remain accessible.
+
+### Bug-fix Milestone 3 — Defensive Live Activity lifecycle
+
+- [x] Centralize start, update, end, discovery, duplicate cleanup, persistence, and diagnostics in `LiveActivityManager`.
+- [x] Reconcile ActivityKit against the persisted active session on launch and foreground.
+- [x] Invalidate inconsistent/expired sessions and end orphaned activities.
+- [x] Add an eight-hour maximum lifetime and meaningful timer/training/stale presentation.
+- [x] Add deterministic reconciliation and display-state tests.
+
+Acceptance: normal finish/cancel ends immediately, valid background workouts survive, stale activities are honest, and relaunch cleans orphaned state.
+
+### Bug-fix Milestone 4 — Final and physical verification
+
+- [x] Run the complete test suite, clean simulator build, and signed arm64 device build using the main scheme.
+- [ ] Install and launch the signed build on the physical iPhone once the paired device reconnects.
+- [ ] Verify tab interaction, music continuity, workout controls, normal activity finish/cancel, backgrounding, and force-quit behavior on the iPhone.
+- [x] Inspect available simulator logs and update `PROGRESS.md` and `README.md` with exact results and iOS limitations.
+
+Acceptance: both fixes build and test, physical observations are recorded, and unavoidable force-quit behavior is documented honestly.

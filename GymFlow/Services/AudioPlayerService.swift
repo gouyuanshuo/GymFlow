@@ -215,6 +215,7 @@ final class AudioPlayerService: NSObject, ObservableObject, AVAudioPlayerDelegat
                 try AVAudioSession.sharedInstance().setActive(true)
                 newPlayer.play()
                 startProgressTimer()
+                lastError = nil
             } else {
                 progressTimer?.invalidate()
             }
@@ -322,8 +323,7 @@ final class AudioPlayerService: NSObject, ObservableObject, AVAudioPlayerDelegat
     private func configureAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [.allowAirPlay])
-            try session.setActive(true)
+            try session.setCategory(.playback, mode: .default)
         } catch {
             lastError = "Audio playback could not be prepared. \(error.localizedDescription)"
         }
@@ -345,6 +345,7 @@ final class AudioPlayerService: NSObject, ObservableObject, AVAudioPlayerDelegat
             try AVAudioSession.sharedInstance().setActive(true)
             player.play()
             isPlaying = player.isPlaying
+            lastError = nil
             startProgressTimer()
             updateNowPlayingInfo()
             persistSnapshot()
