@@ -33,9 +33,9 @@ struct SettingsView: View {
                     Toggle("Automatically play assigned playlist", isOn: $automaticallyPlayAssignedPlaylist)
                 }
 
-                Section("Feedback") {
-                    Toggle("Rest timer sound", isOn: $timerSoundEnabled)
-                    Toggle("Haptic feedback", isOn: $hapticFeedbackEnabled)
+                Section("Rest Timer Alert") {
+                    Toggle("Sound", isOn: $timerSoundEnabled)
+                    Toggle("Haptic", isOn: $hapticFeedbackEnabled)
                 }
 
                 Section("Appearance") {
@@ -106,6 +106,9 @@ struct SettingsView: View {
         sessions.forEach {
             RestTimerService.clearPersistedState(
                 keyPrefix: "restTimer.\($0.id.uuidString)"
+            )
+            RestTimerNotificationScheduler.shared.cancel(
+                identifier: RestTimerNotificationScheduler.identifier(for: $0.id)
             )
         }
         RestTimerService.clearPersistedState(keyPrefix: "restTimer")

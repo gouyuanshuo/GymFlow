@@ -64,6 +64,7 @@ struct NowPlayingView: View {
                 Spacer()
             }
             .padding(.horizontal, 28)
+            .accessibilityIdentifier("now-playing-screen")
             .navigationTitle("Now Playing")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

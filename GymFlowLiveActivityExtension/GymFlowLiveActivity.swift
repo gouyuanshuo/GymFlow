@@ -1,4 +1,5 @@
 import ActivityKit
+import AppIntents
 import SwiftUI
 import WidgetKit
 
@@ -37,23 +38,12 @@ struct GymFlowLiveActivity: Widget {
                     )
                 }
                 DynamicIslandExpandedRegion(.center) {
-                    Text(isExpired(context) ? "Workout status unavailable" : context.state.exerciseName)
+                    Text(isExpired(context) ? "Workout status unavailable" : exerciseName(context))
                         .font(.headline)
                         .lineLimit(1)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    if isExpired(context) {
-                        Text("Open GymFlow to confirm")
-                            .font(.caption)
-                    } else {
-                        HStack {
-                            Text("Set \(context.state.currentSet) of \(context.state.totalSets)")
-                            Spacer()
-                            Text(context.state.workoutStartDate, style: .timer)
-                                .monospacedDigit()
-                        }
-                        .font(.caption)
-                    }
+                    WorkoutActivityExpandedControls(context: context)
                 }
             } compactLeading: {
                 Image(systemName: isExpired(context)
@@ -94,6 +84,21 @@ struct GymFlowLiveActivity: Widget {
         case .stale: "exclamationmark.triangle.fill"
         }
     }
+
+    private func exerciseName(
+        _ context: ActivityViewContext<WorkoutActivityAttributes>
+    ) -> String {
+        switch WorkoutActivityPolicy.displayState(
+            for: context.state,
+            isStale: context.isStale,
+            now: Date()
+        ) {
+        case .resting, .paused:
+            return context.state.lastCompletedExerciseName ?? context.state.exerciseName
+        case .ready, .training, .stale:
+            return context.state.exerciseName
+        }
+    }
 }
 
 private struct WorkoutActivityLockScreenView: View {
@@ -119,19 +124,20 @@ private struct WorkoutActivityLockScreenView: View {
                         Text(context.state.workoutStartDate, style: .timer)
                             .font(.subheadline.monospacedDigit())
                     }
-                    Text(context.state.exerciseName)
+
+                    Text(displayExerciseName)
                         .font(.title3.weight(.semibold))
                         .lineLimit(1)
-                    HStack {
-                        Text("Set \(context.state.currentSet) of \(context.state.totalSets)")
-                        Spacer()
-                        WorkoutActivityStatusView(
-                            state: context.state,
-                            isStale: context.isStale,
-                            compact: false
-                        )
+
+                    switch displayState {
+                    case .resting, .paused:
+                        restContent
+                    case .ready, .training:
+                        setContent
+                    case .stale:
+                        EmptyView()
                     }
-                    .font(.subheadline)
+
                     ProgressView(
                         value: Double(context.state.completedExercises),
                         total: Double(max(1, context.state.totalExercises))
@@ -143,12 +149,162 @@ private struct WorkoutActivityLockScreenView: View {
         .padding()
     }
 
+    private var restContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                if let completedSet = context.state.lastCompletedSetNumber {
+                    Text("Set \(completedSet) complete")
+                } else {
+                    Text("Rest")
+                }
+                Spacer()
+                WorkoutActivityStatusView(
+                    state: context.state,
+                    isStale: context.isStale,
+                    compact: false
+                )
+                .font(.title3.weight(.semibold))
+            }
+            RestActivityButtons(sessionID: context.attributes.sessionID)
+        }
+    }
+
+    @ViewBuilder
+    private var setContent: some View {
+        if context.state.workoutReadyToFinish {
+            Label("Workout ready to finish", systemImage: "checkmark.seal.fill")
+                .font(.headline)
+                .foregroundStyle(.green)
+        } else {
+            HStack {
+                Text("Set \(context.state.currentSet) of \(context.state.totalSets)")
+                Spacer()
+                Text(targetDescription)
+                    .fontWeight(.semibold)
+            }
+            .font(.subheadline)
+
+            if displayState == .ready {
+                Label("Rest complete — ready", systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.green)
+            }
+
+            if let setID = context.state.currentSetID {
+                Button(intent: CompleteCurrentSetIntent(
+                    sessionID: context.attributes.sessionID,
+                    setID: setID
+                )) {
+                    Label("Complete Set", systemImage: "checkmark.circle.fill")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.accentColor)
+                .accessibilityLabel("Complete set \(context.state.currentSet)")
+            }
+        }
+    }
+
     private var displayState: WorkoutActivityDisplayState {
         WorkoutActivityPolicy.displayState(
             for: context.state,
             isStale: context.isStale,
             now: Date()
         )
+    }
+
+    private var displayExerciseName: String {
+        switch displayState {
+        case .resting, .paused:
+            return context.state.lastCompletedExerciseName ?? context.state.exerciseName
+        case .ready, .training, .stale:
+            return context.state.exerciseName
+        }
+    }
+
+    private var targetDescription: String {
+        let weight = context.state.targetWeight.formatted(
+            .number.precision(.fractionLength(0...2))
+        )
+        return "\(weight) kg × \(context.state.targetRepetitions)"
+    }
+}
+
+private struct WorkoutActivityExpandedControls: View {
+    let context: ActivityViewContext<WorkoutActivityAttributes>
+
+    var body: some View {
+        switch displayState {
+        case .resting, .paused:
+            VStack(spacing: 8) {
+                if let completedSet = context.state.lastCompletedSetNumber {
+                    Text("Set \(completedSet) complete")
+                        .font(.caption)
+                }
+                RestActivityButtons(sessionID: context.attributes.sessionID)
+            }
+        case .ready, .training:
+            if context.state.workoutReadyToFinish {
+                Label("Workout ready to finish", systemImage: "checkmark.seal.fill")
+                    .font(.caption.weight(.semibold))
+            } else if let setID = context.state.currentSetID {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Set \(context.state.currentSet) of \(context.state.totalSets)")
+                        Text(targetDescription)
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.caption)
+                    Spacer()
+                    Button(intent: CompleteCurrentSetIntent(
+                        sessionID: context.attributes.sessionID,
+                        setID: setID
+                    )) {
+                        Label("Complete", systemImage: "checkmark")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.accentColor)
+                }
+            }
+        case .stale:
+            Text("Open GymFlow to confirm")
+                .font(.caption)
+        }
+    }
+
+    private var displayState: WorkoutActivityDisplayState {
+        WorkoutActivityPolicy.displayState(
+            for: context.state,
+            isStale: context.isStale,
+            now: Date()
+        )
+    }
+
+    private var targetDescription: String {
+        let weight = context.state.targetWeight.formatted(
+            .number.precision(.fractionLength(0...2))
+        )
+        return "\(weight) kg × \(context.state.targetRepetitions)"
+    }
+}
+
+private struct RestActivityButtons: View {
+    let sessionID: UUID
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button(intent: AddThirtySecondsRestIntent(sessionID: sessionID)) {
+                Label("30 sec", systemImage: "plus")
+                    .frame(maxWidth: .infinity)
+            }
+            Button(intent: SkipRestIntent(sessionID: sessionID)) {
+                Label("Skip", systemImage: "forward.end.fill")
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .font(.caption.weight(.semibold))
+        .buttonStyle(.bordered)
     }
 }
 
@@ -178,7 +334,7 @@ private struct WorkoutActivityStatusView: View {
                 Text("\(currentSet)/\(totalSets)")
                     .monospacedDigit()
             } else {
-                Label("Training", systemImage: "figure.strengthtraining.traditional")
+                Label("Ready", systemImage: "figure.strengthtraining.traditional")
             }
         case .stale:
             Image(systemName: "exclamationmark.triangle.fill")

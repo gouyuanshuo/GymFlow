@@ -196,3 +196,132 @@ Acceptance: normal finish/cancel ends immediately, valid background workouts sur
 - [x] Inspect available simulator logs and update `PROGRESS.md` and `README.md` with exact results and iOS limitations.
 
 Acceptance: both fixes build and test, physical observations are recorded, and unavoidable force-quit behavior is documented honestly.
+
+## Plans, Now Playing, and Duration-estimate UX Quality Fix
+
+### UX Milestone 1 — Audit and baseline
+
+- [x] Read project guidance and inspect plan editor presentation, root/workout mini-player presentation, shared audio state, session persistence, Today estimates, and existing tests.
+- [x] Record the plan first-tap and Now Playing auto-dismiss root causes.
+- [x] Run the unchanged main-scheme simulator build and inspect simulator/physical-device availability.
+
+Acceptance: the state races and previous duration heuristic are identified, and the baseline build succeeds.
+
+### UX Milestone 2 — Deterministic plan selection
+
+- [x] Replace split optional-plan/Boolean presentation state with one item-driven editor presentation.
+- [x] Keep existing-plan selection and explicit plan creation as separate intents.
+- [x] Verify selection does not insert or duplicate a SwiftData plan.
+
+Acceptance: an existing plan opens on the first tap and only the create control can open a new-plan editor.
+
+### UX Milestone 3 — Stable Now Playing presentation
+
+- [x] Move Now Playing presentation ownership from the transient mini-player/accessory view to stable root and workout hosts.
+- [x] Keep presentation independent from current track, play/pause, progress, queue, shuffle, and repeat updates.
+- [x] Hide the mini-player while full Now Playing is presented and preserve explicit Done/swipe dismissal.
+
+Acceptance: Now Playing stays open until explicit dismissal and continues using the shared audio service.
+
+### UX Milestone 4 — History-based workout estimates
+
+- [x] Add a testable estimator with strict workout-plan UUID matching and static fallback.
+- [x] Filter active, planned, cancelled, invalid-timestamp, missing-plan, and clearly corrupted sessions.
+- [x] Use one sample directly, two-sample arithmetic mean, and the median of the latest five for three or more samples.
+- [x] Integrate the reactive estimate into Today and add focused unit coverage.
+
+Acceptance: recent valid history drives Today without allowing unrelated plans or outliers to distort the estimate.
+
+### UX Milestone 5 — Final and physical verification
+
+- [x] Run the new Plans UI test, complete main-scheme tests, and final clean simulator/device builds.
+- [x] Install and launch the signed build on the connected physical iPhone.
+- [x] Verify first-tap Plans, sustained Now Playing interactions, and reactive historical estimates on device where test data permits.
+- [x] Record exact results and remaining device/data limitations.
+
+Acceptance: automated regressions pass, physical observations are honest, and the repository is buildable.
+
+## Active Workout Exercise Screen Redesign
+
+### Redesign Milestone 1 — Audit and baseline
+
+- [x] Read project guidance and inspect the active workout, set logging, previous performance, rest timer, mini-player, exercise navigation, persistence, and Live Activity paths.
+- [x] Record the cramped table, truncated labels, oversized inputs, dominant set actions, and crowded lower-controls hierarchy.
+- [x] Run the unchanged main-scheme simulator build.
+
+Acceptance: existing workout behavior is mapped before presentation changes begin, and the baseline compiles.
+
+### Redesign Milestone 2 — Exercise hierarchy and set cards
+
+- [x] Replace the rigid four-column table with responsive, self-contained set cards.
+- [x] Add a clear exercise header, compact horizontally scrolling previous-performance reference, lighter numeric inputs, a full Warm-up chip, and a 44-point circular completion control.
+- [x] Make Add Set secondary and move individual removal into each set's actions menu while preserving a minimum of one set.
+
+Acceptance: set number, Weight, Reps, Warm-up, and completion remain legible and tappable without narrow fixed columns.
+
+### Redesign Milestone 3 — Timer, player, navigation, and accessibility
+
+- [x] Place all variable workout content in one scroll view and reserve the bottom safe area for the shared mini-player and exercise navigation.
+- [x] Compact the rest timer and adapt its controls, the workout header, and exercise navigation for accessibility Dynamic Type.
+- [x] Add accessibility labels, state values, stable UI-test identifiers, and focused card/add/remove/timer/navigation UI coverage.
+
+Acceptance: six or more sets remain reachable, the footer does not overlap content or the Home indicator, and controls retain 44-point targets.
+
+### Redesign Milestone 4 — Responsive and physical verification
+
+- [x] Verify compact, standard, and Dynamic Island simulator widths, including Dark Mode and accessibility-extra-large Dynamic Type.
+- [x] Run the GymFlow unit suite and a final clean simulator build.
+- [x] Install, launch, and exercise the redesigned workout on the connected iPhone with previous performance and imported music.
+- [x] Record exact results and remaining limitations in `PROGRESS.md`.
+
+Acceptance: the redesign builds, tested interaction paths pass, and the physical iPhone shows no truncation or footer overlap.
+
+## Interactive Live Activity and Rest Alert Upgrade
+
+### Interaction Milestone 1 — Audit and baseline
+
+- [x] Read project guidance and inspect Live Activity, SwiftData workout state, timer persistence, notifications, audio session, settings, and device availability.
+- [x] Confirm the installed SDK's native interactive Live Activity mechanism and iOS 17 minimum.
+- [x] Run the unchanged main-scheme simulator build and focused unit baseline.
+
+Acceptance: the existing state boundaries and platform mechanism are known before mutation paths change.
+
+### Interaction Milestone 2 — Shared complete-set action
+
+- [x] Add one idempotent `WorkoutActionService` used by the active workout and Live Activity intent.
+- [x] Add `CompleteCurrentSetIntent` as a native `LiveActivityIntent` without foregrounding GymFlow.
+- [x] Persist through the app's existing SwiftData container and reject stale or duplicate set identifiers.
+- [x] Update Lock Screen and expanded Dynamic Island content with Complete Set, +30 seconds, and Skip controls.
+
+Acceptance: every surface produces the same set state, starts the same persisted rest timer, and never advances on a duplicate request.
+
+### Interaction Milestone 3 — Noticeable and reliable rest completion
+
+- [x] Add a repeated one-second two-tone cue, strong haptic sequence, and temporary GymFlow-music ducking with restoration.
+- [x] Keep the audio session on `.playback` without category-option changes.
+- [x] Schedule one stable time-sensitive local notification per workout and cancel/reschedule it for timer changes.
+- [x] Suppress foreground notification presentation in favor of the in-app multimodal cue.
+- [x] Keep independent Sound and Haptic settings under Rest Timer Alert.
+
+Acceptance: foreground and background paths are coordinated, music is not stopped, and an expired Live Activity reads Rest Complete/Ready instead of `0:00`.
+
+### Interaction Milestone 4 — Verification and documentation
+
+- [x] Add focused completion, idempotency, final-set, stale-ID, timer-action, notification, and alert-state tests.
+- [x] Build the main app and standalone Widget Extension successfully.
+- [x] Run the complete focused unit suite on Simulator and a signed physical iPhone.
+- [x] Install and cold-launch the signed app with its embedded extension on the connected iPhone.
+- [ ] Perform the human Lock Screen button, Dynamic Island button, audible cue, haptic, and locked-background acceptance gestures; command-line XCTest cannot unlock/authenticate or judge audible/haptic intensity, and the physical UI runner timed out enabling automation mode.
+
+Acceptance: automated and package verification pass, with human-only system-surface observations recorded honestly rather than inferred.
+
+### Interaction Milestone 5 — Locked-device authentication correction
+
+- [x] Explicitly declare the least restrictive `.alwaysAllowed` intent policy for Complete Set, +30 seconds, and Skip.
+- [x] Add a regression test for authentication and foreground-launch metadata.
+- [x] Clean-build and sign the main app plus embedded Live Activity Extension.
+- [x] Verify extracted App Intents metadata in both bundles and install the corrected build on the physical iPhone.
+- [x] Record the physical-iPhone finding that WidgetKit still requires device authentication before third-party controls run on a genuinely locked Live Activity.
+- [x] Preserve the native control and avoid unsupported media-command remapping or other system-control workarounds.
+
+Acceptance: GymFlow adds no stricter App Intent authentication of its own, and the unavoidable WidgetKit locked-device security boundary is documented accurately.
