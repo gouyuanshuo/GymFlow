@@ -5,14 +5,40 @@ import SwiftData
 
 struct WorkoutActivitySnapshot: Equatable {
     let exerciseName: String
+    let currentSetID: UUID?
     let currentSet: Int
     let totalSets: Int
+    let targetWeight: Double
+    let targetRepetitions: Int
+    let lastCompletedExerciseName: String?
+    let lastCompletedSetNumber: Int?
     let completedExercises: Int
     let totalExercises: Int
     let workoutStartDate: Date
     let restEndDate: Date?
     let pausedRestSeconds: Int
     let restComplete: Bool
+    let workoutReadyToFinish: Bool
+
+    static func unavailable(now: Date) -> WorkoutActivitySnapshot {
+        WorkoutActivitySnapshot(
+            exerciseName: "Workout status unavailable",
+            currentSetID: nil,
+            currentSet: 1,
+            totalSets: 1,
+            targetWeight: 0,
+            targetRepetitions: 0,
+            lastCompletedExerciseName: nil,
+            lastCompletedSetNumber: nil,
+            completedExercises: 0,
+            totalExercises: 1,
+            workoutStartDate: now,
+            restEndDate: nil,
+            pausedRestSeconds: 0,
+            restComplete: false,
+            workoutReadyToFinish: false
+        )
+    }
 }
 
 @MainActor
@@ -111,6 +137,9 @@ final class LiveActivityManager {
                 defaults: defaults,
                 keyPrefix: "restTimer.\(session.id.uuidString)"
             )
+            RestTimerNotificationScheduler.shared.cancel(
+                identifier: RestTimerNotificationScheduler.identifier(for: session.id)
+            )
             changedStoredSessions = true
         }
         if changedStoredSessions {
@@ -139,6 +168,28 @@ final class LiveActivityManager {
             snapshot: snapshot
         )
         reconcile(session: session)
+    }
+
+    func updateImmediately(session: WorkoutSession, now: Date = Date()) async {
+        let snapshot = snapshot(for: session, now: now)
+        let state = contentState(from: snapshot)
+        let matchingActivities = Activity<WorkoutActivityAttributes>.activities.filter {
+            $0.attributes.sessionID == session.id
+        }
+        for activity in matchingActivities {
+            await activity.update(content(for: state))
+        }
+        if let activity = matchingActivities.first {
+            let sessionState = WorkoutActivitySessionState(
+                sessionID: session.id,
+                workoutName: session.planNameSnapshot,
+                disposition: .active,
+                startedAt: session.startedAt,
+                hasValidWorkoutData: !session.orderedExerciseRecords.isEmpty,
+                snapshot: snapshot
+            )
+            record(activity: activity, session: sessionState, now: now)
+        }
     }
 
     func end(sessionID: UUID, finalSnapshot: WorkoutActivitySnapshot) {
@@ -231,14 +282,20 @@ final class LiveActivityManager {
     ) -> WorkoutActivityAttributes.ContentState {
         WorkoutActivityAttributes.ContentState(
             exerciseName: snapshot.exerciseName,
+            currentSetID: snapshot.currentSetID,
             currentSet: snapshot.currentSet,
             totalSets: snapshot.totalSets,
+            targetWeight: snapshot.targetWeight,
+            targetRepetitions: snapshot.targetRepetitions,
+            lastCompletedExerciseName: snapshot.lastCompletedExerciseName,
+            lastCompletedSetNumber: snapshot.lastCompletedSetNumber,
             completedExercises: snapshot.completedExercises,
             totalExercises: snapshot.totalExercises,
             workoutStartDate: snapshot.workoutStartDate,
             restEndDate: snapshot.restEndDate,
             pausedRestSeconds: snapshot.pausedRestSeconds,
             restComplete: snapshot.restComplete,
+            workoutReadyToFinish: snapshot.workoutReadyToFinish,
             workoutExpiresAt: snapshot.workoutStartDate.addingTimeInterval(
                 WorkoutActivityPolicy.maximumDuration
             )
@@ -250,34 +307,7 @@ final class LiveActivityManager {
         now: Date
     ) -> WorkoutActivitySessionState {
         let exercises = session.orderedExerciseRecords
-        let savedIndex = session.currentExerciseIndex ?? exercises.firstIndex(where: {
-            $0.orderedSets.contains(where: { !$0.isCompleted })
-        }) ?? 0
-        let exerciseIndex = min(max(0, savedIndex), max(0, exercises.count - 1))
-        let exercise = exercises.indices.contains(exerciseIndex) ? exercises[exerciseIndex] : nil
-        let currentSet = session.currentSetNumber
-            ?? exercise?.orderedSets.first(where: { !$0.isCompleted })?.setNumber
-            ?? exercise?.orderedSets.last?.setNumber
-            ?? 1
-        let completedExercises = exercises.filter { record in
-            !record.orderedSets.isEmpty && record.orderedSets.allSatisfy(\.isCompleted)
-        }.count
-        let timerState = RestTimerService.persistedActivityState(
-            defaults: defaults,
-            keyPrefix: "restTimer.\(session.id.uuidString)",
-            now: now
-        )
-        let snapshot = WorkoutActivitySnapshot(
-            exerciseName: exercise?.exerciseNameSnapshot ?? "Workout status unavailable",
-            currentSet: currentSet,
-            totalSets: max(1, exercise?.orderedSets.count ?? 1),
-            completedExercises: completedExercises,
-            totalExercises: exercises.count,
-            workoutStartDate: session.startedAt,
-            restEndDate: timerState.deadline,
-            pausedRestSeconds: timerState.pausedSeconds,
-            restComplete: timerState.didComplete
-        )
+        let snapshot = snapshot(for: session, now: now)
         return WorkoutActivitySessionState(
             sessionID: session.id,
             workoutName: session.planNameSnapshot,
@@ -287,6 +317,57 @@ final class LiveActivityManager {
                 && !exercises.isEmpty
                 && exercises.allSatisfy { !$0.orderedSets.isEmpty },
             snapshot: snapshot
+        )
+    }
+
+    func snapshot(for session: WorkoutSession, now: Date = Date()) -> WorkoutActivitySnapshot {
+        let exercises = session.orderedExerciseRecords
+        let savedIndex = session.currentExerciseIndex ?? exercises.firstIndex(where: {
+            $0.orderedSets.contains(where: { !$0.isCompleted })
+        }) ?? 0
+        let exerciseIndex = min(max(0, savedIndex), max(0, exercises.count - 1))
+        let exercise = exercises.indices.contains(exerciseIndex) ? exercises[exerciseIndex] : nil
+        let incompleteSet = exercise?.orderedSets.first(where: {
+            if let savedNumber = session.currentSetNumber {
+                return $0.setNumber == savedNumber && !$0.isCompleted
+            }
+            return !$0.isCompleted
+        }) ?? exercise?.orderedSets.first(where: { !$0.isCompleted })
+        let displaySet = incompleteSet ?? exercise?.orderedSets.last
+        let completedExercises = exercises.filter { record in
+            !record.orderedSets.isEmpty && record.orderedSets.allSatisfy(\.isCompleted)
+        }.count
+        var latestCompleted: (exercise: ExerciseRecord, set: WorkoutSetRecord)?
+        for completedExercise in exercises {
+            for completedSet in completedExercise.orderedSets
+            where completedSet.isCompleted && completedSet.completedAt != nil {
+                if (completedSet.completedAt ?? .distantPast)
+                    > (latestCompleted?.set.completedAt ?? .distantPast) {
+                    latestCompleted = (completedExercise, completedSet)
+                }
+            }
+        }
+        let timerState = RestTimerService.persistedActivityState(
+            defaults: defaults,
+            keyPrefix: "restTimer.\(session.id.uuidString)",
+            now: now
+        )
+        return WorkoutActivitySnapshot(
+            exerciseName: exercise?.exerciseNameSnapshot ?? "Workout status unavailable",
+            currentSetID: incompleteSet?.id,
+            currentSet: displaySet?.setNumber ?? 1,
+            totalSets: max(1, exercise?.orderedSets.count ?? 1),
+            targetWeight: displaySet?.weight ?? 0,
+            targetRepetitions: displaySet?.repetitions ?? 0,
+            lastCompletedExerciseName: latestCompleted?.exercise.exerciseNameSnapshot,
+            lastCompletedSetNumber: latestCompleted?.set.setNumber,
+            completedExercises: completedExercises,
+            totalExercises: exercises.count,
+            workoutStartDate: session.startedAt,
+            restEndDate: timerState.deadline,
+            pausedRestSeconds: timerState.pausedSeconds,
+            restComplete: timerState.didComplete,
+            workoutReadyToFinish: !exercises.isEmpty && completedExercises == exercises.count
         )
     }
 

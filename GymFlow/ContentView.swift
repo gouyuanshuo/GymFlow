@@ -10,10 +10,14 @@ struct ContentView: View {
     @AppStorage("activeWorkoutSessionID") private var activeWorkoutSessionID = ""
     @State private var selectedTab: AppTab = .today
     @State private var isWorkoutPresented = false
+    @State private var nowPlayingPresentation = NowPlayingPresentationState()
     @State private var seedingError: String?
 
     var body: some View {
         rootTabs
+            .sheet(isPresented: nowPlayingPresentedBinding) {
+                NowPlayingView()
+            }
             .task {
                 seedInitialData()
                 audioPlayer.synchronizeLibrary(tracks)
@@ -42,12 +46,16 @@ struct ContentView: View {
         if #available(iOS 26.0, *) {
             tabs
                 .tabViewBottomAccessory {
-                    if showsGlobalMiniPlayer { MiniPlayerView() }
+                    if showsGlobalMiniPlayer {
+                        MiniPlayerView { nowPlayingPresentation.present() }
+                    }
                 }
         } else {
             tabs
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if showsGlobalMiniPlayer { MiniPlayerView() }
+                    if showsGlobalMiniPlayer {
+                        MiniPlayerView { nowPlayingPresentation.present() }
+                    }
                 }
         }
     }
@@ -79,7 +87,15 @@ struct ContentView: View {
     private var showsGlobalMiniPlayer: Bool {
         MiniPlayerPresentationPolicy.showsGlobalPlayer(
             hasLoadedTrack: audioPlayer.currentTrack != nil,
-            isWorkoutPresented: isWorkoutPresented
+            isWorkoutPresented: isWorkoutPresented,
+            isNowPlayingPresented: nowPlayingPresentation.isPresented
+        )
+    }
+
+    private var nowPlayingPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { nowPlayingPresentation.isPresented },
+            set: { nowPlayingPresentation.updateSystemPresentation($0) }
         )
     }
 

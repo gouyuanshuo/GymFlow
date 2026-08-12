@@ -5,8 +5,7 @@ struct PlansView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \WorkoutPlan.sortOrder) private var plans: [WorkoutPlan]
     @Query(sort: \Playlist.sortOrder) private var playlists: [Playlist]
-    @State private var editorPresented = false
-    @State private var editorPlan: WorkoutPlan?
+    @State private var editorPresentation: PlanEditorPresentation?
     @State private var pendingDeletion: WorkoutPlan?
     @State private var errorMessage: String?
 
@@ -19,7 +18,7 @@ struct PlansView: View {
                     } description: {
                         Text("Build a plan from the exercise library to get started.")
                     } actions: {
-                        Button("Create Plan") { presentEditor(nil) }
+                        Button("Create Plan") { presentCreateEditor() }
                             .buttonStyle(.borderedProminent)
                     }
                 } else {
@@ -32,6 +31,7 @@ struct PlansView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .accessibilityIdentifier("workout-plan-row")
                             .contextMenu {
                                 Button("Edit", systemImage: "pencil") { presentEditor(plan) }
                                 Button("Duplicate", systemImage: "plus.square.on.square") { duplicate(plan) }
@@ -51,11 +51,11 @@ struct PlansView: View {
             .navigationTitle("Workout Plans")
             .toolbar {
                 if !plans.isEmpty { EditButton() }
-                Button("Create Plan", systemImage: "plus") { presentEditor(nil) }
+                Button("Create Plan", systemImage: "plus") { presentCreateEditor() }
                     .accessibilityLabel("Create workout plan")
             }
-            .sheet(isPresented: $editorPresented) {
-                NavigationStack { PlanEditorView(plan: editorPlan) }
+            .sheet(item: $editorPresentation) { presentation in
+                NavigationStack { PlanEditorView(plan: presentation.plan) }
                     .interactiveDismissDisabled()
             }
             .alert("Delete Workout Plan?", isPresented: Binding(
@@ -76,9 +76,12 @@ struct PlansView: View {
         }
     }
 
-    private func presentEditor(_ plan: WorkoutPlan?) {
-        editorPlan = plan
-        editorPresented = true
+    private func presentEditor(_ plan: WorkoutPlan) {
+        editorPresentation = .edit(plan)
+    }
+
+    private func presentCreateEditor() {
+        editorPresentation = .create()
     }
 
     private func duplicate(_ plan: WorkoutPlan) {
@@ -105,6 +108,19 @@ struct PlansView: View {
     private func saveOrReport(_ prefix: String) {
         do { try modelContext.save() }
         catch { errorMessage = "\(prefix) \(error.localizedDescription)" }
+    }
+}
+
+struct PlanEditorPresentation: Identifiable {
+    let id: UUID
+    let plan: WorkoutPlan?
+
+    static func create() -> PlanEditorPresentation {
+        PlanEditorPresentation(id: UUID(), plan: nil)
+    }
+
+    static func edit(_ plan: WorkoutPlan) -> PlanEditorPresentation {
+        PlanEditorPresentation(id: plan.id, plan: plan)
     }
 }
 

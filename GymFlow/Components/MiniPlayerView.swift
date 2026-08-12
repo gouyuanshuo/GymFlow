@@ -2,12 +2,12 @@ import SwiftUI
 
 struct MiniPlayerView: View {
     @EnvironmentObject private var audioPlayer: AudioPlayerService
-    @State private var nowPlayingPresented = false
+    let onOpenNowPlaying: () -> Void
 
     var body: some View {
         if let track = audioPlayer.currentTrack {
             HStack(spacing: 8) {
-                Button { nowPlayingPresented = true } label: {
+                Button(action: onOpenNowPlaying) {
                     HStack(spacing: 9) {
                         Image(systemName: "music.note")
                             .font(.subheadline.weight(.semibold))
@@ -33,6 +33,7 @@ struct MiniPlayerView: View {
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 .accessibilityLabel("Open Now Playing for \(track.title)")
+                .accessibilityIdentifier("open-now-playing")
 
                 Button("Previous", systemImage: "backward.fill") { audioPlayer.previous() }
                     .labelStyle(.iconOnly)
@@ -54,7 +55,6 @@ struct MiniPlayerView: View {
             .frame(minHeight: 56)
             .background(.thinMaterial)
             .overlay(alignment: .top) { Divider() }
-            .sheet(isPresented: $nowPlayingPresented) { NowPlayingView() }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("music-mini-player")
         }

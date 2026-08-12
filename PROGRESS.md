@@ -2,12 +2,253 @@
 
 ## Current status
 
+- Completed: interactive Lock Screen/Dynamic Island workout actions and coordinated stronger rest-completion feedback.
 - Completed: first-release Milestones 0–8 and continuous-experience Upgrade Milestones 1–9.
 - Completed: root-layout bug fix and defensive Live Activity lifecycle implementation with unit/UI verification.
-- Current work: final clean/device build and physical-iPhone verification.
-- Next action: reconnect the paired iPhone, install the signed main app, and perform the tab/Dynamic Island acceptance pass.
+- Completed: deterministic first-tap plan routing, stable Now Playing presentation ownership, and history-based duration estimation with simulator and physical-iPhone verification.
+- Completed: Active Workout exercise-screen redesign with responsive set cards, compact reference/timer UI, safe-area player/navigation controls, and simulator plus physical-iPhone verification.
+- Current work: native Live Activity controls use the least restrictive supported App Intent policy; physical testing confirms iOS still authenticates third-party controls on a genuinely locked device by design.
+- Next action: complete the remaining human-only Dynamic Island and alert-intensity acceptance pass on the installed iPhone build.
 
 ## Engineering log
+
+### 2026-08-12 — Locked Live Activity button authentication correction
+
+- Investigated the report that every Lock Screen **Complete Set** tap requested the device passcode. The actions already conformed to `LiveActivityIntent` and had `openAppWhenRun = false`, but their lock-screen authentication policy depended on the protocol default rather than being emitted as an explicit product decision.
+- Added `authenticationPolicy = .alwaysAllowed` to `CompleteCurrentSetIntent`, `AddThirtySecondsRestIntent`, and `SkipRestIntent`. This is the least restrictive App Intent policy and ensures GymFlow does not add an authentication requirement of its own. No workout validation, persistence, timer, audio, notification, or Live Activity rendering paths changed.
+- Added a regression test covering all three authentication policies and all three `openAppWhenRun` values. Extracted metadata from both the signed main app and extension reports `authenticationPolicy: 0`, `isAuthPolExplicit: true`, and `openAppWhenRun: false` for every action.
+- The first test build failed because the new test referenced the policy enum without importing `AppIntents`; adding that test-target import fixed it. The first all-test Simulator launch then stalled waiting for an XCTest worker under the previously observed Xcode 26.6 coordinator defect and was interrupted. After restarting the Simulator service on a different installed iPhone runtime, the focused test and full suite completed normally.
+- Physical follow-up then confirmed that Complete Set and +30 seconds still request passcode authentication while music play/pause does not. Apple documents this distinction: buttons and toggles in third-party widgets and Live Activities are inactive on a locked device until the person authenticates and unlocks it. `.alwaysAllowed` controls App Intent policy but does not override WidgetKit's locked-surface security. Now Playing uses privileged system media controls and is therefore not equivalent.
+- There is no supported API to remove this WidgetKit authentication boundary. GymFlow keeps the native `Button(intent:)` implementation, which completes the action without opening the full app after authentication. It does not misappropriate lock-screen media commands, fake a system control, or weaken device security.
+
+Clean main-app/embedded-extension build:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowLockScreenAuthBuildDerivedData CODE_SIGNING_ALLOWED=NO clean build -quiet
+```
+
+Result: exit 0, **CLEAN BUILD SUCCEEDED**.
+
+Test-bundle compile:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowLockScreenAuthBuildForTestingDerivedData CODE_SIGNING_ALLOWED=NO build-for-testing -quiet
+```
+
+Result: exit 0, **BUILD FOR TESTING SUCCEEDED**.
+
+Final full unit suite:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=30393FFE-FE4E-4706-9E61-78D23C7D1044' -derivedDataPath /tmp/GymFlowLockScreenAuthAllTestsDerivedData CODE_SIGNING_ALLOWED=NO -only-testing:GymFlowTests -parallel-testing-enabled NO test -quiet
+```
+
+Result: exit 0, **46/46 passed**, zero failures or skips on iPhone 17e / iOS 26.5.
+
+Signed physical build and install:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -configuration Debug -destination 'platform=iOS,id=00008120-001479921160201E' -derivedDataPath /tmp/GymFlowLockScreenAuthPhysicalBuildDerivedData -allowProvisioningUpdates clean build -quiet
+xcrun devicectl device install app --device 00008120-001479921160201E --timeout 60 /tmp/GymFlowLockScreenAuthPhysicalBuildDerivedData/Build/Products/Debug-iphoneos/GymFlow.app
+```
+
+Result: exit 0 for both commands, **SIGNED CLEAN BUILD AND INSTALL SUCCEEDED** on `nv` (iPhone 14 Pro Max, iOS 26.6), preserving app data. Physical XCTest could not launch while the phone was locked because Xcode itself requires an unlocked test host. The owner then performed the locked-surface check and reported the system authentication prompt for Complete Set and +30 seconds, confirming WidgetKit's documented behavior.
+
+### 2026-08-12 — Interactive Live Activity set completion and stronger rest alert
+
+- Confirmed the installed iOS 26.5 SDK provides `LiveActivityIntent` and `Button(intent:)` from iOS 17.0, matching GymFlow's existing deployment target. `CompleteCurrentSetIntent`, `AddThirtySecondsRestIntent`, and `SkipRestIntent` have `openAppWhenRun = false`; the system runs them in GymFlow's process without presenting its foreground UI. The signed app and extension both contain extracted App Intents metadata for all three actions.
+- Added `WorkoutActionService` as the shared idempotent mutation boundary. Both `ActiveWorkoutView` and the Live Activity coordinator validate stable set IDs, set `completedAt`, advance to the next incomplete set/exercise, leave the final workout active and ready to finish, and reject stale or duplicate requests without completing another set.
+- Kept the existing SwiftData store authoritative. Because `LiveActivityIntent` executes in the app process, no App Group or duplicated workout database is required. `GymFlowDataStore` now creates and retains the one container used by SwiftUI and the intent coordinator.
+- Expanded ActivityKit state with the current set ID, weight/repetitions, last completed exercise/set, and ready-to-finish state. Lock Screen and expanded Dynamic Island show Complete Set while training/ready and +30 sec/Skip while resting. Compact Dynamic Island remains limited to the workout icon and set progress or rest countdown. Deadline rendering changes an expired rest to Ready/Rest complete rather than leaving `0:00`.
+- Replaced the weak one-shot system sound with a generated in-memory, repeated two-tone PCM cue lasting about one second. The alert uses warning plus heavy-impact haptics, temporarily fades only GymFlow's AVAudioPlayer to 22%, then restores its exact previous volume. The `AVAudioSession` remains `.playback`; no category options or system-volume overrides were added.
+- Added one time-sensitive local notification per workout, scheduled at the deadline with a stable identifier. Start/resume/restart schedules; +30 reschedules; pause/skip/cancel/workout deletion cancels. Foreground delivery is suppressed and the in-app sound/haptic is preferred, avoiding a duplicate notification cue. Background/locked delivery remains controlled by notification permission, Focus, Silent Mode, and iOS scheduling.
+- Settings now presents independent Sound and Haptic toggles under **Rest Timer Alert**. No intensity setting was added.
+- Added focused coverage for completion, exact rest duration, duplicate/idempotent completion, final exercise, final workout set, stale Live Activity IDs, +30, skip, notification rescheduling/cancellation, alert configuration, and generated cue shape.
+
+Baseline simulator build:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowInteractiveBaselineDerivedData CODE_SIGNING_ALLOWED=NO build -quiet
+```
+
+Result: exit 0, **BUILD SUCCEEDED**, including the pre-change extension.
+
+Final clean simulator build:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowInteractiveFinalSimulatorDerivedData CODE_SIGNING_ALLOWED=NO clean build -quiet
+```
+
+Result: exit 0, **CLEAN BUILD SUCCEEDED**, with `GymFlowLiveActivityExtension.appex` embedded.
+
+Standalone Widget Extension build:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -target GymFlowLiveActivityExtension -sdk iphonesimulator -configuration Debug SYMROOT=/tmp/GymFlowInteractiveStandaloneWidgetProducts OBJROOT=/tmp/GymFlowInteractiveStandaloneWidgetIntermediates CODE_SIGNING_ALLOWED=NO clean build -quiet
+```
+
+Result: exit 0, **STANDALONE WIDGET BUILD SUCCEEDED**. Xcode emitted only its generic `ONLY_ACTIVE_ARCH` warning for a multi-architecture target build.
+
+Simulator unit-test command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=8869D2AC-6D86-4A70-BB63-556862EDD7BC' -derivedDataPath /tmp/GymFlowInteractiveUnitTests4DerivedData CODE_SIGNING_ALLOWED=NO -only-testing:GymFlowTests -parallel-testing-enabled NO test -quiet
+```
+
+Result: exit 0, **45/45 passed**, zero failures or skips on iPhone 17 / iOS 26.5.
+
+Signed physical build and install:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -configuration Debug -destination 'platform=iOS,id=00008120-001479921160201E' -derivedDataPath /tmp/GymFlowInteractivePhysicalDerivedData -allowProvisioningUpdates clean build -quiet
+xcrun devicectl device install app --device 00008120-001479921160201E --timeout 60 /tmp/GymFlowInteractivePhysicalDerivedData/Build/Products/Debug-iphoneos/GymFlow.app
+xcrun devicectl device process launch --device 00008120-001479921160201E --timeout 30 --terminate-existing com.gouyuanshuo.GymFlow
+```
+
+Result: exit 0 throughout, **SIGNED CLEAN BUILD, INSTALL, AND COLD LAUNCH SUCCEEDED** on `nv` (iPhone 14 Pro Max, iOS 26.6). The signed product has only `UIBackgroundModes = [audio]`, `NSSupportsLiveActivities = true`, and the signed embedded widget. Existing application data was preserved.
+
+Physical-device unit-test command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS,id=00008120-001479921160201E' -derivedDataPath /tmp/GymFlowInteractivePhysicalTestsDerivedData -allowProvisioningUpdates -only-testing:GymFlowTests -parallel-testing-enabled NO test -quiet
+```
+
+Result: exit 0, **45/45 passed**, zero failures or skips on the iPhone 14 Pro Max / iOS 26.6.
+
+UI-runner status: the focused simulator UI launch was blocked by the existing Xcode 26.6 `DebuggerVersionStore: no debugger version` defect even after a simulator reboot, and the physical UI runner timed out enabling automation mode. Both were stopped rather than left hanging; the UI-test bundle compiles. Command-line tools cannot authenticate a locked iPhone, tap Lock Screen or expanded Dynamic Island controls, or judge audible/haptic intensity. Therefore the signed install and on-device business-logic verification are complete, but the requested human acceptance gestures (actual Lock Screen/Dynamic Island tap, music duck audibility, haptic strength, and locked notification delivery) remain explicitly **not observed** and must be performed with the phone in hand.
+
+Platform limitations: interactive Live Activity controls require iOS 17 or newer. On a genuinely locked device, iOS requires authentication before any third-party WidgetKit/Live Activity button or toggle can perform its action; App Intent `.alwaysAllowed` cannot override that system rule. Local notification timing is best-effort and respects notification authorization, Focus, Silent Mode, and system volume. GymFlow cannot force output volume or guarantee code execution after a user force-quits it.
+
+### 2026-08-11 — Active Workout exercise-screen redesign and physical verification
+
+- Replaced the cramped `SET | WEIGHT | REPS | DONE` grid with a native card hierarchy. Each card now gives `Set N` an unconstrained heading, keeps Weight and Reps side by side in subtle rounded fields, shows the complete `Warm-up` label as a stateful chip, and uses a 44-by-44-point circular completion control. The old narrow Done column and permanent large Remove button no longer exist.
+- Added `WorkoutExerciseHeader`, `PreviousPerformanceCard`, `WorkoutSetCard`, and `WorkoutExerciseNavigation`. Previous performance is a one-line horizontal chip scroller; Add Set is a secondary bordered action; individual set deletion lives in an actions menu and cannot reduce an exercise below one set. Completed cards gain only a subtle tint and outline.
+- Kept the existing model and workflow boundaries intact. Direct decimal Weight and integer Reps entry, warm-up persistence, `completedAt`, haptics, deadline-based rest startup, immediate SwiftData saves, active-position restoration, history snapshots, volume calculation, Live Activity synchronization, and finish/cancel behavior still use the established records and services. No data-model migration was introduced.
+- Moved variable content into a single scrolling column and reserved the bottom safe area for the existing shared `AudioPlayerService` mini-player plus exercise navigation. The timer sits after the set area and uses a two-row control layout at accessibility sizes. Long exercise names may use two lines; the plan name in the navigation bar intentionally truncates to protect Finish and More.
+- Added focused UI coverage for full labels, 44-point hit targets, card containment, warm-up state, six-set scrolling, Add Set, per-set removal, set completion, automatic rest, and footer reachability. Added a physical-data path that verifies previous performance and the shared player's previous/play-pause/next controls without resetting the user's database.
+
+Baseline build command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowActiveWorkoutBaselineDerivedData CODE_SIGNING_ALLOWED=NO build -quiet
+```
+
+Baseline result: exit 0, **BUILD SUCCEEDED**.
+
+Responsive focused UI-test commands:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=BE3E1DA1-5745-42DA-88B2-D3CAFF380FFF' -derivedDataPath /tmp/GymFlowActiveWorkoutCleanUITestDerivedData CODE_SIGNING_ALLOWED=NO -parallel-testing-enabled NO test -only-testing:GymFlowUITests/GymFlowUITests/testActiveWorkoutCardLayoutAndSetActions -quiet
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=BE3E1DA1-5745-42DA-88B2-D3CAFF380FFF' -derivedDataPath /tmp/GymFlowActiveWorkoutDarkTypeUITestDerivedData CODE_SIGNING_ALLOWED=NO -parallel-testing-enabled NO test -only-testing:GymFlowUITests/GymFlowUITests/testActiveWorkoutCardLayoutAndSetActions -quiet
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=30393FFE-FE4E-4706-9E61-78D23C7D1044' -derivedDataPath /tmp/GymFlowActiveWorkoutCompactUITestDerivedData CODE_SIGNING_ALLOWED=NO -parallel-testing-enabled NO test -only-testing:GymFlowUITests/GymFlowUITests/testActiveWorkoutCardLayoutAndSetActions -quiet
+```
+
+Responsive UI result: exit 0 on iPhone 17e at standard Large text and iPhone 17 Pro at standard settings. The iPhone 17 Pro passed again in Dark Mode with `accessibility-extra-large` text, and the standard iPhone 17 width was inspected in the simulator. Retained screenshots show full `Set N` and `Warm-up` labels, side-by-side inputs, six-set scrolling, the two-row accessibility timer, compact mini-player, and reachable exercise navigation without Home-indicator overlap.
+
+Physical unit-test command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS,id=00008120-001479921160201E' -derivedDataPath /tmp/GymFlowActiveWorkoutPhysicalUnitTestsDerivedData -allowProvisioningUpdates -parallel-testing-enabled NO test -only-testing:GymFlowTests -quiet
+```
+
+Unit-test result: exit 0, **35/35 tests passed**, with zero failures or skips on `nv` (iPhone 14 Pro Max, iOS 26.6).
+
+Final clean simulator build command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowActiveWorkoutFinalDerivedData CODE_SIGNING_ALLOWED=NO clean build -quiet
+```
+
+Final simulator result: exit 0, **CLEAN BUILD SUCCEEDED**.
+
+Signed physical-device build command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -configuration Debug -destination 'platform=iOS,id=00008120-001479921160201E' -derivedDataPath /tmp/GymFlowActiveWorkoutPhysicalDerivedData clean build -quiet
+```
+
+Signed physical result: exit 0, **CLEAN BUILD SUCCEEDED**. The app installed with `xcrun devicectl device install app` and launched with `xcrun devicectl device process launch`, preserving the existing application database.
+
+Physical Active Workout UI-test command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS,id=00008120-001479921160201E' -derivedDataPath /tmp/GymFlowActiveWorkoutPhysicalUITestDerivedData -allowProvisioningUpdates -parallel-testing-enabled NO test -only-testing:GymFlowUITests/GymFlowUITests/testPhysicalActiveWorkoutPresentationWithExistingData -quiet
+```
+
+Physical UI result: exit 0, **1/1 passed**. On the connected iPhone 14 Pro Max in Dark Mode, the screen used the existing long `Glute Kickback Machine` exercise, displayed 40 kg and 24 repetitions, added a copied fourth active set, showed four compact previous-performance chips, and played the imported `18. Teo Torriatte` through the shared mini-player. The test confirmed full Set 1–4 and Warm-up text, toggled playback to Pause, completed a set, observed automatic Rest, and cancelled the disposable session cleanly. Visual inspection found no control overlap or Home-indicator collision.
+
+One final attempt to run the older simulator smoke test was blocked before assertions by Xcode's local `DebuggerVersionStore: no debugger version` / test-coordinator startup defect and was stopped rather than left hanging. This is not an application failure: the same completion/rest/cancel path passed in the focused simulator UI test and on the physical iPhone, and the complete unit suite passed on-device.
+
+Remaining layout limitation: at the largest accessibility sizes, footer Previous/Next buttons intentionally become icon-only while retaining explicit VoiceOver labels, allowing the centered exercise count and 44-point targets to fit compact widths. No workout behavior or data capability was removed.
+
+### 2026-08-11 — Three-issue UX audit, implementation, and unit verification
+
+- Baseline main-scheme simulator build succeeded before source changes. `simctl` found an already booted iPhone 17 simulator, and elevated CoreDevice enumeration found the paired iPhone `nv` connected as an iPhone 14 Pro Max.
+- Plan first-tap root cause: `PlansView` separately mutated `editorPlan` and `editorPresented`, then a Boolean sheet read the optional plan. SwiftUI could render the first sheet transaction before the optional model propagated, so `PlanEditorView` initialized its draft as a new plan. Replaced both variables with one item-driven `PlanEditorPresentation`; editing always carries the tapped model and creation is a separate explicit route. The editor still inserts only after validated Save, so the old failed-tap path did not itself persist empty plans and no destructive cleanup was added.
+- Now Playing root cause: `MiniPlayerView` owned both its local `@State` presentation Boolean and the sheet while the mini-player lived inside a conditional iOS 26 tab accessory (and a conditional workout footer). Frequent shared-player publications could rebuild that transient presentation host, resetting its local state and dismissing the sheet. Presentation state and the sheet now live on stable `ContentView` / `ActiveWorkoutView` hosts; mini-players only send an open intent, and are hidden while Now Playing is open.
+- Previous workout estimate: `WorkoutPlan.expectedDurationMinutes` summed 45 seconds per target set plus configured rest between sets, rounded up to whole minutes. Today used that static value for every plan regardless of history.
+- New workout estimate: `WorkoutDurationEstimator` strictly matches `WorkoutSession.workoutPlanID` to the plan UUID, accepts only completed sessions with positive durations under eight hours, sorts by completion time, and uses at most the latest five. One sample is used directly, two use their arithmetic mean, and three to five use the median. No valid history retains the existing static estimate. Today observes SwiftData sessions, so a newly completed workout participates without relaunching.
+- Added unit coverage for plan-selection model counts, static fallback, one/two samples, three/five-sample median, latest-five selection, invalid/cancelled/active/other-plan filtering, Now Playing presentation lifetime, and mini-player hiding. Added a Plans UI regression that checks Plan A, Plan B, Plan A again, relaunch, and explicit create.
+
+Baseline build command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowUXBaselineDerivedData CODE_SIGNING_ALLOWED=NO build -quiet
+```
+
+Baseline result: exit 0, **BUILD SUCCEEDED**.
+
+Implementation build command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowUXImplementationDerivedData CODE_SIGNING_ALLOWED=NO build -quiet
+```
+
+Implementation result: exit 0, **BUILD SUCCEEDED**.
+
+Focused unit-test command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=8869D2AC-6D86-4A70-BB63-556862EDD7BC' -derivedDataPath /tmp/GymFlowUXUnitTestsDerivedData CODE_SIGNING_ALLOWED=NO -only-testing:GymFlowTests -parallel-testing-enabled NO test -quiet
+```
+
+Focused unit-test result: exit 0, **34/34 tests passed** with zero failures or skips. The result was confirmed from the generated `.xcresult` summary.
+
+The first physical Plans UI attempt was blocked because the UI-test runner lacked its own provisioning profile. Retrying with `-allowProvisioningUpdates` provisioned the runner without changing checked-in signing settings. That run reached the app but exposed a test-fixture assumption: it searched for simulator seed names while the iPhone correctly retained the user's own plans. The test was corrected to read the actual first and second row names, verify the editor field matches each tapped row, relaunch and repeat, and assert that cancelling editors leaves the plan count unchanged. No device data was reset or deleted.
+
+Final complete simulator test command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=8869D2AC-6D86-4A70-BB63-556862EDD7BC' -derivedDataPath /tmp/GymFlowUXFinalAllTestsDerivedData CODE_SIGNING_ALLOWED=NO -parallel-testing-enabled NO test -quiet
+```
+
+Final test result: exit 0, **38 logical tests passed, 2 skipped, zero failed**. The data-dependent Now Playing and Today-history UI checks skipped on the simulator because its app store had no local audio or completed history; both checks subsequently executed and passed on the physical iPhone. Xcode emitted its known non-fatal local `DebuggerVersionStore: no debugger version` warnings before UI runner launches.
+
+Final clean simulator build command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowUXFinalCleanDerivedData CODE_SIGNING_ALLOWED=NO clean build -quiet
+```
+
+Final simulator result: exit 0, **CLEAN BUILD SUCCEEDED**.
+
+Final signed physical-device build command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -configuration Debug -destination 'platform=iOS,id=00008120-001479921160201E' -derivedDataPath /tmp/GymFlowUXFinalPhysicalDerivedData clean build -quiet
+```
+
+Final physical build result: exit 0, **SIGNED CLEAN BUILD SUCCEEDED**, including the embedded Live Activity extension. Product inspection confirmed `UIBackgroundModes = [audio]` and `NSSupportsLiveActivities = true`.
+
+Physical iPhone verification (`nv`, iPhone 14 Pro Max, iOS 26.6):
+
+- Installed `/tmp/GymFlowUXFinalPhysicalDerivedData/Build/Products/Debug-iphoneos/GymFlow.app` successfully with `devicectl`, preserving the existing application database, and cold-launched bundle `com.gouyuanshuo.GymFlow` successfully.
+- Plans UI test: exit 0, **1/1 passed**. It opened the first available plan once, a second plan when present, the first again, terminated/relaunched, opened it again, then used `+` to open New Plan and cancelled. The plan count was unchanged.
+- Now Playing UI test: exit 0, **1/1 passed with local device audio**. It opened from the mini-player, remained open for at least ten seconds, stayed open through pause, resume, Next, Previous, shuffle, and repeat, hid the mini-player while presented, and returned to the synchronized mini-player only after Done.
+- Today estimate-source UI test: exit 0, **1/1 passed**. The selected physical-device plan reported a history-backed estimate rather than the static target estimate.
+- Exact estimator tests cover 0/1/2/3/5/>5 samples, the five-sample 120-minute outlier example, strict plan-ID matching, active/cancelled/invalid/corrupt filtering, and immediate inclusion of a newly completed session. A new workout was not fabricated on the user's phone solely to test refresh, avoiding pollution of real history.
+
+Remaining limitation for this focused pass: the earlier Lock Screen, Control Center, Bluetooth/call interruption, background audio, and Live Activity features were preserved and the full scheme passed, but those unrelated system-surface scenarios were not manually re-exercised here. The checked-in untracked device screenshot was left untouched.
 
 ### 2026-08-06 — Launch-time Music Error fix
 

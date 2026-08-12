@@ -56,19 +56,19 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		A10000000000000000000010 /* Exceptions for GymFlow folder in GymFlow target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 33935AA3302441390042BE48 /* GymFlow */;
-		};
-		A1000000000000000000000F /* Exceptions for GymFlowLiveActivityExtension folder in GymFlowLiveActivityExtension target */ = {
+		A1000000000000000000000F /* Exceptions for "GymFlowLiveActivityExtension" folder in "GymFlowLiveActivityExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
 			target = A10000000000000000000007 /* GymFlowLiveActivityExtension */;
+		};
+		A10000000000000000000010 /* Exceptions for "GymFlow" folder in "GymFlow" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 33935AA3302441390042BE48 /* GymFlow */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -76,7 +76,7 @@
 		33935AA6302441390042BE48 /* GymFlow */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				A10000000000000000000010 /* Exceptions for GymFlow folder in GymFlow target */,
+				A10000000000000000000010 /* Exceptions for "GymFlow" folder in "GymFlow" target */,
 			);
 			path = GymFlow;
 			sourceTree = "<group>";
@@ -99,7 +99,7 @@
 		A10000000000000000000002 /* GymFlowLiveActivityExtension */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				A1000000000000000000000F /* Exceptions for GymFlowLiveActivityExtension folder in GymFlowLiveActivityExtension target */,
+				A1000000000000000000000F /* Exceptions for "GymFlowLiveActivityExtension" folder in "GymFlowLiveActivityExtension" target */,
 			);
 			path = GymFlowLiveActivityExtension;
 			sourceTree = "<group>";
@@ -519,10 +519,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = GymFlow/Info.plist;
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UIBackgroundModes = audio;
-				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
@@ -554,10 +554,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = GymFlow/Info.plist;
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UIBackgroundModes = audio;
-				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;

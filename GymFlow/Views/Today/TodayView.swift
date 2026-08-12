@@ -78,6 +78,10 @@ struct TodayView: View {
 
     @ViewBuilder
     private func planCard(_ plan: WorkoutPlan) -> some View {
+        let durationEstimate = WorkoutDurationEstimator.estimate(
+            for: plan,
+            sessions: sessions
+        )
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
@@ -101,7 +105,14 @@ struct TodayView: View {
 
             HStack(spacing: 24) {
                 Label("\(plan.exercises.count) exercises", systemImage: "list.number")
-                Label("About \(plan.expectedDurationMinutes) min", systemImage: "clock")
+                Label(
+                    "About \(durationEstimate.roundedMinutes) min",
+                    systemImage: "clock"
+                )
+                .accessibilityIdentifier("workout-duration-estimate")
+                .accessibilityValue(durationEstimate.source == .history
+                    ? "Based on \(durationEstimate.sampleCount) recent workouts"
+                    : "Based on plan targets")
             }
             .font(.subheadline)
 

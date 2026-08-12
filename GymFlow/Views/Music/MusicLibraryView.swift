@@ -79,6 +79,7 @@ struct MusicLibraryView: View {
                                             TrackRow(track: track, isCurrent: isCurrent)
                                         }
                                         .buttonStyle(.plain)
+                                        .accessibilityIdentifier("music-library-track")
                                         .swipeActions(edge: .leading) {
                                             Button("Add to Playlist", systemImage: "text.badge.plus") {
                                                 pendingAddToPlaylist = track

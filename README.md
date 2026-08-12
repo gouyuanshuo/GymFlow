@@ -7,20 +7,21 @@ GymFlow is a private, offline-first iPhone workout companion. It combines workou
 - Ordered workout plans using built-in or custom exercises
 - Target sets, repetitions, weight, rest, and exercise notes
 - Focused, one-exercise-at-a-time workouts with immediate set persistence and previous-value prefill
-- Deadline-based rest timer with pause, resume, skip, restart, and +30 seconds
+- Deadline-based rest timer with pause, resume, skip, restart, +30 seconds, and coordinated local notifications
 - Completed-session summaries, volume, history, and exercise progress
 - Local audio import and app-owned file storage, including FLAC where AVFoundation supports the file
 - Named many-to-many playlists with ordered tracks, stable shuffle queues, and repeat off/one/all
 - Optional workout-plan playlist assignment and off-by-default automatic playback
 - Persistent shared mini-player, full Now Playing, background audio, Control Center/Lock Screen metadata, remote commands, and interruption handling
-- Active-workout Live Activity and Dynamic Island presentation on supported iPhones
+- Interactive active-workout Live Activity and Dynamic Island controls for completing the current set, adding 30 seconds, and skipping rest
+- Strong rest-complete feedback with a repeated short tone, strong haptic, and temporary GymFlow-music ducking
 - Offline settings and destructive-data controls
 
 No user accounts, cloud service, analytics, ads, subscriptions, AI, or network backend are used.
 
 ## Architecture
 
-GymFlow is a SwiftUI application using SwiftData for persistence. Lightweight view models/workflow services own domain behavior, `RestTimerService` uses deadline math, `AudioPlayerService` owns one AVFoundation player across navigation and system controls, and `AudioFileStore` owns stable local file copies. On iOS 26 the compact player uses the native tab-bar accessory; iOS 17–25 use a reserving safe-area inset. `LiveActivityManager` isolates ActivityKit lifecycle work, reconciles activities against the persisted workout on launch/foreground, and removes duplicates or orphans. Historical sessions keep name/value/playlist snapshots so plan changes cannot rewrite history.
+GymFlow is a SwiftUI application using SwiftData for persistence. Lightweight view models/workflow services own domain behavior, `WorkoutActionService` applies idempotent set completion from both the app and Live Activity, `RestTimerService` uses deadline math, `AudioPlayerService` owns one AVFoundation player across navigation and system controls, and `AudioFileStore` owns stable local file copies. On iOS 26 the compact player uses the native tab-bar accessory; iOS 17–25 use a reserving safe-area inset. `LiveActivityManager` isolates ActivityKit lifecycle work, reconciles activities against the persisted workout on launch/foreground, and removes duplicates or orphans. Interactive controls use iOS 17 `LiveActivityIntent`, run in GymFlow's process without foregrounding its UI, and explicitly use the least restrictive `.alwaysAllowed` App Intent policy. WidgetKit still requires device authentication before third-party buttons or toggles execute on a genuinely locked Live Activity. The existing SwiftData store stays authoritative and no App Group is needed. Historical sessions keep name/value/playlist snapshots so plan changes cannot rewrite history.
 
 ## Project structure
 
@@ -64,12 +65,13 @@ xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS
 
 ## Current limitations
 
-- Background audio, Now Playing metadata, remote commands, and the embedded Live Activity extension compile and install in Simulator, but Lock Screen, Bluetooth, call interruption, and Dynamic Island behavior still require acceptance testing on a paired physical iPhone.
+- First-tap plan selection, sustained in-app Now Playing controls, and history-backed Today estimates were verified on a signed iPhone 14 Pro Max build running iOS 26.6. The full Now Playing check used existing local audio and covered ten seconds of progress plus pause/resume, previous/next, shuffle, repeat, and explicit dismissal.
+- The signed app and embedded interactive Live Activity extension build and install on the paired iPhone 14 Pro Max. The original 45 focused tests passed on that device; the explicit locked-action metadata regression brings the current Simulator suite to 46/46. A human must still tap the actual Lock Screen/Dynamic Island controls and judge cue/haptic intensity because XCTest cannot automate a locked system surface or evaluate sound/haptic strength.
 - iOS does not deliver a guaranteed callback after a user force-quits an app. GymFlow therefore keeps a valid active workout through ordinary backgrounding, ends its activity immediately during normal finish/cancel, reconciles orphaned activities on launch/foreground, and uses an eight-hour validity/stale horizon. After force-quit, exact removal timing is controlled by iOS; an unrefreshed activity changes to an explicit “Workout status unavailable” state instead of remaining an unexplained `0:00`.
 - Audio import supports unprotected local MP3, M4A, AAC, WAV, AIFF, CAF, and FLAC files playable by AVFoundation. Artist, album, and artwork metadata are not extracted during import in this release, so GymFlow uses clear text and artwork fallbacks.
 - Exercise progress prioritizes accurate lists and aggregates; charts and personal-record detection are not included.
 - The primary layout is portrait iPhone; iPad-specific layout is outside first-release scope.
-- Timer completion feedback uses an in-app system sound/haptic and is not a scheduled local notification while the app is terminated.
+- Local-notification delivery is subject to the user's notification authorization, Focus, Silent Mode, and system notification settings. On a genuinely locked iPhone, Apple requires authentication before third-party WidgetKit or Live Activity buttons execute, even when their App Intent policy is `.alwaysAllowed`. System Now Playing controls are privileged media controls and do not establish an exception third-party workout actions can use. GymFlow does not and cannot override this security boundary or system output volume.
 
 No manual capability step is required by the checked-in project: the app has only the audio background mode, `NSSupportsLiveActivities` is enabled, and `GymFlowLiveActivityExtension` is embedded. For a physical iPhone, open **Signing & Capabilities** for both `GymFlow` and `GymFlowLiveActivityExtension`, select the same valid development team, pair/trust the iPhone, and run the `GymFlow` scheme. If Xcode reports that the audio mode is missing after regenerating settings, add **Background Modes** to the app target and check only **Audio, AirPlay, and Picture in Picture**.
 

@@ -4,14 +4,20 @@ import Foundation
 struct WorkoutActivityAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
         var exerciseName: String
+        var currentSetID: UUID?
         var currentSet: Int
         var totalSets: Int
+        var targetWeight: Double
+        var targetRepetitions: Int
+        var lastCompletedExerciseName: String?
+        var lastCompletedSetNumber: Int?
         var completedExercises: Int
         var totalExercises: Int
         var workoutStartDate: Date
         var restEndDate: Date?
         var pausedRestSeconds: Int
         var restComplete: Bool
+        var workoutReadyToFinish: Bool
         var workoutExpiresAt: Date?
     }
 

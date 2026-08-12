@@ -25,6 +25,7 @@ final class AudioPlayerService: NSObject, ObservableObject, AVAudioPlayerDelegat
     private let defaults: UserDefaults
     private let persistenceKey = "audioPlayer.playbackSnapshot"
     private var wasPlayingBeforeInterruption = false
+    private var volumeBeforeAlertDuck: Float?
     private var remoteCommandTargets: [(command: MPRemoteCommand, token: Any)] = []
 
     override convenience init() {
@@ -186,6 +187,20 @@ final class AudioPlayerService: NSObject, ObservableObject, AVAudioPlayerDelegat
         queueName = nil
         queuePlaylistID = nil
         defaults.removeObject(forKey: persistenceKey)
+    }
+
+    func beginTemporaryAlertDuck() {
+        guard let player, player.isPlaying else { return }
+        if volumeBeforeAlertDuck == nil {
+            volumeBeforeAlertDuck = player.volume
+        }
+        player.setVolume(0.22, fadeDuration: 0.10)
+    }
+
+    func endTemporaryAlertDuck() {
+        guard let volume = volumeBeforeAlertDuck else { return }
+        player?.setVolume(volume, fadeDuration: 0.16)
+        volumeBeforeAlertDuck = nil
     }
 
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {

@@ -21,16 +21,23 @@ final class RestTimerService: NSObject, ObservableObject {
     private var timer: Timer?
     private let defaults: UserDefaults
     private let keyPrefix: String
+    private let notificationScheduler: RestTimerNotificationScheduling?
+    private let notificationIdentifier: String?
+    private(set) var notificationSoundEnabled = true
     var onCompletion: (() -> Void)?
     var deadline: Date? { endDate }
 
     init(
         defaults: UserDefaults = .standard,
         keyPrefix: String = "restTimer",
-        migrationKeyPrefix: String? = nil
+        migrationKeyPrefix: String? = nil,
+        sessionID: UUID? = nil,
+        notificationScheduler: RestTimerNotificationScheduling? = nil
     ) {
         self.defaults = defaults
         self.keyPrefix = keyPrefix
+        self.notificationScheduler = notificationScheduler
+        self.notificationIdentifier = sessionID.map(RestTimerNotificationScheduler.identifier(for:))
         super.init()
         migrateStateIfNeeded(from: migrationKeyPrefix)
         restore()
@@ -91,6 +98,7 @@ final class RestTimerService: NSObject, ObservableObject {
         isPaused = false
         stateRevision += 1
         persist()
+        scheduleCompletionNotification()
         scheduleTimer()
     }
 
@@ -102,6 +110,7 @@ final class RestTimerService: NSObject, ObservableObject {
         isRunning = false
         isPaused = pausedRemaining > 0
         timer?.invalidate()
+        cancelCompletionNotification()
         stateRevision += 1
         persist()
     }
@@ -114,6 +123,7 @@ final class RestTimerService: NSObject, ObservableObject {
         isPaused = false
         stateRevision += 1
         persist()
+        scheduleCompletionNotification()
         scheduleTimer()
     }
 
@@ -127,6 +137,7 @@ final class RestTimerService: NSObject, ObservableObject {
         isPaused = false
         didComplete = false
         stateRevision += 1
+        cancelCompletionNotification()
         clearPersistence()
     }
 
@@ -149,6 +160,7 @@ final class RestTimerService: NSObject, ObservableObject {
         }
         stateRevision += 1
         persist()
+        if isRunning { scheduleCompletionNotification() }
     }
 
     func skip() {
@@ -161,12 +173,34 @@ final class RestTimerService: NSObject, ObservableObject {
         isPaused = false
         didComplete = true
         stateRevision += 1
+        cancelCompletionNotification()
         clearTimerPersistence()
         defaults.set(originalDuration, forKey: "\(keyPrefix).originalDuration")
         defaults.set(true, forKey: "\(keyPrefix).didComplete")
     }
 
     func dismissCompletion() { cancel() }
+
+    func reload(now: Date = Date()) {
+        timer?.invalidate()
+        timer = nil
+        endDate = nil
+        pausedRemaining = 0
+        remainingSeconds = 0
+        isRunning = false
+        isPaused = false
+        didComplete = false
+        restore(now: now)
+        stateRevision += 1
+    }
+
+    func setNotificationSoundEnabled(_ enabled: Bool) {
+        guard notificationSoundEnabled != enabled else { return }
+        notificationSoundEnabled = enabled
+        if isRunning {
+            scheduleCompletionNotification()
+        }
+    }
 
     func refresh(now: Date = Date()) {
         guard isRunning, let endDate else { return }
@@ -227,6 +261,7 @@ final class RestTimerService: NSObject, ObservableObject {
                 endDate = date
                 remainingSeconds = remaining
                 isRunning = true
+                scheduleCompletionNotification()
                 scheduleTimer()
             } else {
                 didComplete = true
@@ -263,5 +298,19 @@ final class RestTimerService: NSObject, ObservableObject {
                 defaults.removeObject(forKey: oldKey)
             }
         }
+    }
+
+    private func scheduleCompletionNotification() {
+        guard let endDate, let notificationIdentifier else { return }
+        notificationScheduler?.schedule(RestTimerNotificationPlan(
+            identifier: notificationIdentifier,
+            endDate: endDate,
+            soundEnabled: notificationSoundEnabled
+        ))
+    }
+
+    private func cancelCompletionNotification() {
+        guard let notificationIdentifier else { return }
+        notificationScheduler?.cancel(identifier: notificationIdentifier)
     }
 }
