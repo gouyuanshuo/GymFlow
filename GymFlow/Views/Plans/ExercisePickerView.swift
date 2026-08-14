@@ -6,95 +6,104 @@ struct ExercisePickerView: View {
     @Query(sort: \ExerciseDefinition.name) private var exercises: [ExerciseDefinition]
     let onSelect: (ExerciseDefinition) -> Void
     @State private var searchText = ""
+    @State private var muscleFilter = ""
+    @State private var equipmentFilter = ""
     @State private var customPresented = false
+    @State private var createdExercise: ExerciseDefinition?
 
     private var filtered: [ExerciseDefinition] {
-        guard !searchText.isEmpty else { return exercises }
-        return exercises.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText)
-                || $0.muscleGroup.localizedCaseInsensitiveContains(searchText)
-        }
+        exercises
+            .filter { !$0.isArchived }
+            .filter { searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(searchText) }
+            .filter { muscleFilter.isEmpty || $0.muscleGroup == muscleFilter }
+            .filter { equipmentFilter.isEmpty || $0.equipment == equipmentFilter }
     }
 
     var body: some View {
         NavigationStack {
-            List(filtered) { exercise in
-                Button {
-                    onSelect(exercise)
-                    dismiss()
-                } label: {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(exercise.name).foregroundStyle(.primary)
-                        Text("\(exercise.muscleGroup) • \(exercise.equipment)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+            Group {
+                if filtered.isEmpty {
+                    ContentUnavailableView(
+                        "No Exercises",
+                        systemImage: "figure.strengthtraining.traditional",
+                        description: Text("Try another name or filter, or create a custom exercise.")
+                    )
+                } else {
+                    List(filtered) { exercise in
+                        Button {
+                            onSelect(exercise)
+                            dismiss()
+                        } label: {
+                            ExerciseLibraryRow(exercise: exercise)
+                        }
+                        .foregroundStyle(.primary)
                     }
                 }
             }
-            .searchable(text: $searchText, prompt: "Exercise or muscle group")
+            .searchable(text: $searchText, prompt: "Exercise name")
             .navigationTitle("Add Exercise")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Custom", systemImage: "plus") { customPresented = true }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItemGroup(placement: .primaryAction) {
+                    filterMenu
+                    Button("New Exercise", systemImage: "plus") { customPresented = true }
                 }
             }
-            .sheet(isPresented: $customPresented) {
-                CustomExerciseView { definition in
-                    onSelect(definition)
-                    dismiss()
+            .sheet(isPresented: $customPresented, onDismiss: selectCreatedExercise) {
+                NavigationStack {
+                    ExerciseEditorView(definition: nil) { definition in
+                        createdExercise = definition
+                    }
                 }
+                .interactiveDismissDisabled()
             }
         }
     }
-}
 
-private struct CustomExerciseView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-    let onCreate: (ExerciseDefinition) -> Void
-    @State private var name = ""
-    @State private var muscleGroup = "Other"
-    @State private var equipment = "Other"
-    @State private var notes = ""
-    @State private var errorMessage: String?
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                TextField("Exercise name", text: $name)
-                TextField("Muscle group", text: $muscleGroup)
-                TextField("Equipment", text: $equipment)
-                TextField("Notes", text: $notes, axis: .vertical)
+    private var filterMenu: some View {
+        Menu {
+            Picker("Muscle Group", selection: $muscleFilter) {
+                Text("All Muscle Groups").tag("")
+                ForEach(muscleOptions, id: \.self) { value in
+                    Text(value).tag(value)
+                }
             }
-            .navigationTitle("Custom Exercise")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Create") { create() } }
+            Picker("Equipment", selection: $equipmentFilter) {
+                Text("All Equipment").tag("")
+                ForEach(equipmentOptions, id: \.self) { value in
+                    Text(value).tag(value)
+                }
             }
-            .alert("Can’t Create Exercise", isPresented: Binding(
-                get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
-            )) { Button("OK", role: .cancel) { } } message: { Text(errorMessage ?? "Unknown error") }
-        }
-    }
-
-    private func create() {
-        do {
-            try InputValidator.validateExerciseName(name)
-            let definition = ExerciseDefinition(
-                name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-                muscleGroup: muscleGroup.trimmingCharacters(in: .whitespacesAndNewlines),
-                equipment: equipment.trimmingCharacters(in: .whitespacesAndNewlines),
-                notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
-                isCustom: true
+            if !muscleFilter.isEmpty || !equipmentFilter.isEmpty {
+                Button("Clear Filters") {
+                    muscleFilter = ""
+                    equipmentFilter = ""
+                }
+            }
+        } label: {
+            Label(
+                "Filter",
+                systemImage: muscleFilter.isEmpty && equipmentFilter.isEmpty
+                    ? "line.3.horizontal.decrease.circle"
+                    : "line.3.horizontal.decrease.circle.fill"
             )
-            modelContext.insert(definition)
-            try modelContext.save()
-            onCreate(definition)
-            dismiss()
-        } catch {
-            errorMessage = error.localizedDescription
         }
+    }
+
+    private var muscleOptions: [String] {
+        Array(Set(ExerciseTaxonomy.muscleGroups + exercises.map(\.muscleGroup))).sorted()
+    }
+
+    private var equipmentOptions: [String] {
+        Array(Set(ExerciseTaxonomy.equipment + exercises.map(\.equipment))).sorted()
+    }
+
+    private func selectCreatedExercise() {
+        guard let createdExercise else { return }
+        self.createdExercise = nil
+        onSelect(createdExercise)
+        dismiss()
     }
 }

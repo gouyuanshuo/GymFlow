@@ -22,7 +22,7 @@ UUID id, name, notes, created/updated dates, sort order, and an ordered collecti
 
 ### ExerciseDefinition
 
-UUID id, name, muscle group, equipment, notes, custom flag, and created date. Seed Barbell Bench Press, Incline Dumbbell Press, Cable Fly, Lat Pulldown, Seated Cable Row, One-arm Dumbbell Row, Dumbbell Shoulder Press, Lateral Raise, Barbell Squat, Leg Press, Romanian Deadlift, Leg Curl, Biceps Curl, and Triceps Pushdown. Users can create validated custom exercises.
+UUID id, name, primary and optional secondary muscle groups, equipment, optional default sets/repetitions/rest, notes, custom/archive flags, and created/updated dates. Seed a manageable built-in strength, core, and cardio library exactly once per library version. Users can search, filter, sort, create, edit, archive, restore, and safely delete unused custom exercises. Duplicate names are rejected using trimmed, case/diacritic-insensitive exact matching.
 
 ### PlannedExercise
 
@@ -42,7 +42,7 @@ UUID id, title, artist, stable stored filename, original filename, extension, op
 
 ## Navigation and screens
 
-The root is a four-tab `TabView`: Today, Plans, History, and Music. A settings toolbar route is available. A mini-player remains available above tab content when a track is loaded.
+The root is a five-tab `TabView`: Today, Plans, History, Music, and Settings. A mini-player remains available above tab content when a track is loaded.
 
 ### Today
 
@@ -50,11 +50,11 @@ Show the date, selected plan, summary, exercise count, expected duration, most r
 
 ### Plans and plan editor
 
-List, create, rename, edit notes, duplicate, delete with confirmation, reorder where practical, and open plans. The editor supports safe save/cancel, exercise library selection, custom exercise creation, removal/reordering, and editing target sets, repetitions, weight, rest, and notes without accidental loss.
+List, create, rename, edit notes, duplicate, delete with confirmation, reorder where practical, and open plans. The editor supports safe save/cancel, filtered available-library selection, in-flow custom exercise creation, removal/reordering, and editing target sets, repetitions, weight, rest, and notes without accidental loss. Definition defaults prefill a new plan row but never prevent plan-specific overrides. Current definition names are used by linked plans; missing definitions fall back to the stored planned-exercise snapshot.
 
 ### Active workout and completion
 
-Show workout name, elapsed time, exercise progress/current exercise, prior performance, all editable sets, completion toggles, warm-up options, add/remove extra set, exercise notes, previous/next controls, rest timer, compact music controls, finish, and confirmed cancel. Save every change immediately. Completing a set starts configured rest, gives optional haptics, and preserves the session across interruptions. Values start from useful plan targets and remain editable. Completion shows duration, completed exercise/set counts, repetitions, training volume (`sum(weight * repetitions)`), editable notes, and a save/return action.
+Show workout name, elapsed time, exercise progress/current exercise, prior performance, all editable sets, completion toggles, warm-up options, add/remove extra set, exercise notes, previous/next controls, rest timer, compact music controls, finish, and confirmed cancel. Save every change immediately. Completing a set starts configured rest, gives optional haptics, and preserves the session across interruptions. Values start from useful plan targets and remain editable. Completion shows duration, completed exercise/set counts, repetitions, training volume (`sum(weight * repetitions)`), editable notes, a Share Workout action, and a save/return action.
 
 ### Rest timer
 
@@ -62,7 +62,11 @@ Dedicated deadline-based service supports start, pause/resume, cancel/restart, s
 
 ### History and progress
 
-Completed sessions are newest first and searchable by plan/exercise. Rows show date, snapshot plan name, duration, exercise count, and set count. Read-only details show times, notes, all exercises and completed sets, and total volume. Entries can be deleted with confirmation. Exercise progress shows dates, best weight, and recent sets; a chart is optional.
+Completed sessions are newest first and searchable by plan/exercise. History switches between List and a Monday-first monthly Calendar without adding another tab. Calendar training days are grouped in memory by `Calendar.current.startOfDay(for: session.startedAt)`, so cross-midnight workouts belong to their local start date and cancelled/active/planned sessions are excluded. Month navigation, current-month return, accessible workout indicators, monthly workout/day/time totals, and empty/single/multiple-workout day sheets are supported. Read-only details show times, notes, all exercises and completed sets, total volume, and a Share Workout action. Entries can be deleted with confirmation. Exercise progress and definition details show dates, best/recent completed sets; charts remain optional.
+
+### Workout result sharing
+
+Completed workouts can create a private, local-only `WorkoutShareSummary` from the historical session snapshot. A dedicated 4:5 card displays GymFlow branding, date, duration, exercise/set/repetition/volume metrics, and up to three deterministic high-volume exercise highlights; notes, music, paths, identifiers, and device data are excluded. Ten original programmatic backgrounds support one-time random selection, non-repeating randomization, and manual choice. Native `ImageRenderer` exports 1080 × 1350 pixels, then `UIActivityViewController` provides system destinations such as Messages, AirDrop, Files, and installed social apps. No share record, account, upload, network, or Photos permission is required.
 
 ### Music and Now Playing
 
@@ -82,4 +86,4 @@ Seed the exercise library and exactly three plans only when no plans exist and i
 
 ## Quality and verification
 
-Unit coverage includes volume, plan duplication, session creation, immutable history snapshots, deadline timer math, unique audio destinations, playlist navigation/shuffle/repeat, and validation. A small launch/workout UI path is included only if reliable. Every milestone requires an app build and applicable tests. The final audit searches TODO/FIXME/placeholders/force unwraps, reviews relationships/file deletion/restoration, runs all tests and a clean simulator build, and records commands, results, manual capability steps, and honest limitations.
+Unit coverage includes volume, plan duplication, session creation, immutable history snapshots, exercise creation/duplicates/defaults/archive/persistence/plan linking, local-day calendar grouping and summaries, share-summary metrics/formatting/highlight selection/background state/export dimensions, deadline timer math, unique audio destinations, playlist navigation/shuffle/repeat, and validation. Focused UI paths cover the workout, workout sharing, and read-only Exercise Library/Calendar navigation where reliable. Every milestone requires an app build and applicable tests. The final audit searches TODO/FIXME/placeholders/force unwraps, reviews relationships/file deletion/restoration, runs tests and a clean simulator build, and records commands, results, manual capability steps, and honest limitations.

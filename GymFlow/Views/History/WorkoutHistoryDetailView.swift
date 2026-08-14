@@ -2,6 +2,8 @@ import SwiftUI
 
 struct WorkoutHistoryDetailView: View {
     let session: WorkoutSession
+    @State private var sharePresentation: WorkoutSharePresentation?
+    @State private var errorMessage: String?
 
     var body: some View {
         List {
@@ -15,6 +17,16 @@ struct WorkoutHistoryDetailView: View {
                 LabeledContent("Total repetitions", value: "\(session.totalRepetitions)")
                 if !session.notes.isEmpty { Text(session.notes) }
             } header: { Text("Summary") }
+
+            Section {
+                Button {
+                    prepareShare()
+                } label: {
+                    Label("Share Workout", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .accessibilityIdentifier("share-history-workout")
+            }
 
             ForEach(session.orderedExerciseRecords) { exercise in
                 Section {
@@ -41,5 +53,28 @@ struct WorkoutHistoryDetailView: View {
         }
         .navigationTitle(session.planNameSnapshot)
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $sharePresentation) { presentation in
+            NavigationStack {
+                WorkoutSharePreviewView(summary: presentation.summary)
+            }
+        }
+        .alert("Couldn’t Share Workout", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(errorMessage ?? "Unknown error")
+        }
+    }
+
+    private func prepareShare() {
+        do {
+            sharePresentation = WorkoutSharePresentation(
+                summary: try WorkoutShareSummaryBuilder.build(from: session)
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }

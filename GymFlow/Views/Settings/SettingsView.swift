@@ -38,6 +38,14 @@ struct SettingsView: View {
                     Toggle("Haptic", isOn: $hapticFeedbackEnabled)
                 }
 
+                Section("Exercises") {
+                    NavigationLink {
+                        ExerciseLibraryView()
+                    } label: {
+                        Label("Exercise Library", systemImage: "figure.strengthtraining.traditional")
+                    }
+                }
+
                 Section("Appearance") {
                     LabeledContent("Theme", value: "Follow System")
                 }

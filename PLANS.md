@@ -325,3 +325,96 @@ Acceptance: automated and package verification pass, with human-only system-surf
 - [x] Preserve the native control and avoid unsupported media-command remapping or other system-control workarounds.
 
 Acceptance: GymFlow adds no stricter App Intent authentication of its own, and the unavoidable WidgetKit locked-device security boundary is documented accurately.
+
+## Exercise Library and Workout Calendar
+
+### Library/Calendar Milestone 1 — Schema audit and compatibility
+
+- [x] Read project guidance and inspect exercise definitions, planned exercise snapshots, completed-session snapshots, seeding, navigation, and tests.
+- [x] Run the unchanged main-scheme simulator build.
+- [x] Add migration-friendly exercise metadata while preserving existing field names, identifiers, relationships, delete rules, and snapshots.
+- [x] Add idempotent built-in exercise upgrades and exact normalized-name linking for legacy planned exercises.
+- [x] Build the model milestone successfully.
+
+Acceptance: the existing SwiftData store remains eligible for lightweight migration, legacy plans keep fallback names, and completed history is never rewritten.
+
+### Library/Calendar Milestone 2 — Exercise Library
+
+- [x] Add Settings navigation, searchable/filterable/sortable available and archived lists, and clear empty states.
+- [x] Add exercise details, recent performance, custom creation, editing, defaults, duplicate validation, archive/restore, and safe deletion.
+- [x] Build the library milestone; focused tests remain part of final verification.
+
+Acceptance: exercises are independently manageable and persist without duplicate insertion.
+
+### Library/Calendar Milestone 3 — Plan integration and history compatibility
+
+- [x] Replace plan exercise selection with the available library search/filter flow and in-flow custom creation.
+- [x] Seed planned values from exercise defaults while preserving plan-specific overrides and order.
+- [x] Keep current plan names synchronized by exercise identifier while completed session snapshots remain immutable.
+- [x] Build plan integration and history compatibility; focused tests remain part of final verification.
+
+Acceptance: renamed/archived definitions work in plans, missing definitions fall back to snapshots, and history remains unchanged.
+
+### Library/Calendar Milestone 4 — Workout Calendar
+
+- [x] Add a History List/Calendar switch, native monthly grid, previous/next/today navigation, indicators, and monthly summary.
+- [x] Group completed sessions in memory by `Calendar.current.startOfDay(for: startedAt)` and exclude every non-completed status.
+- [x] Add accessible day details with empty, single-workout, and multiple-workout states.
+- [x] Build the calendar milestone; focused tests remain part of final verification.
+
+Acceptance: completed workouts appear on their local start date, including cross-midnight sessions, with no per-cell database queries.
+
+### Library/Calendar Milestone 5 — Final verification
+
+- [x] Add focused exercise-library and calendar unit coverage.
+- [x] Run the complete unit suite and final clean simulator build.
+- [x] Build, install, launch, and run the domain suite on the connected physical iPhone; record the physical UI-runner limitation honestly.
+- [x] Audit accessibility, Dark Mode, Dynamic Type, migration safety, and existing-feature regressions.
+
+Acceptance: the main scheme builds, relevant tests pass, and physical results or honest device limitations are recorded.
+
+## Workout Result Sharing
+
+### Sharing Milestone 1 — Architecture audit and baseline
+
+- [x] Inspect completed-session snapshots, exercise/set records, completion/history routes, existing metrics/formatters, assets, previews, and sharing APIs.
+- [x] Confirm sharing can remain entirely local with no SwiftData schema or networking change.
+- [x] Run the unchanged main-scheme simulator build.
+
+Acceptance: the snapshot boundary, presentation entry points, rendering target, and baseline status are known before implementation.
+
+### Sharing Milestone 2 — Stable share summary
+
+- [x] Add an immutable `WorkoutShareSummary` built only from a completed `WorkoutSession` snapshot.
+- [x] Keep duration/count/repetition/volume semantics consistent with the existing completion/history screens.
+- [x] Add deterministic top-exercise selection, compact formatters, validation, and focused tests.
+- [x] Build and test the summary milestone.
+
+Acceptance: plan edits cannot alter an old share summary, private notes are absent, and empty/non-completed sessions fail clearly.
+
+### Sharing Milestone 3 — Card and background system
+
+- [x] Add one original premium 4:5 GymFlow card with controlled typography and concise hierarchy.
+- [x] Add ten offline programmatic backgrounds with contrast metadata, manual selection, and non-repeating randomization.
+- [x] Verify short/long titles, few/many exercises, large numbers, and stable selection.
+- [x] Build the card milestone.
+
+Acceptance: the dedicated card remains readable and visually balanced without relying on visible app screenshots or online assets.
+
+### Sharing Milestone 4 — Rendering and native sharing
+
+- [x] Render the dedicated card with `ImageRenderer` at 1080 × 1350 pixels.
+- [x] Add a native `UIActivityViewController` share sheet with useful image metadata and user-friendly errors.
+- [x] Add completion and history `Share Workout` entry points and a dedicated preview screen.
+- [x] Build and test rendering dimensions plus integration.
+
+Acceptance: both new and old completed sessions produce a sharp local image and open the system share destination picker.
+
+### Sharing Milestone 5 — Final and physical verification
+
+- [x] Run focused/full tests and a final clean simulator build.
+- [x] Verify Dark Mode, Dynamic Type, accessibility, card previews, and exported pixel dimensions.
+- [x] Build/install/launch on the paired iPhone where reachable and attempt completion/history share-sheet flows; the signed build succeeded, but the currently offline device prevented install/launch.
+- [x] Update project documentation with exact results and honest human-only limitations.
+
+Acceptance: GymFlow stays buildable, existing regressions pass, and physical sharing results are observed or precisely bounded.
