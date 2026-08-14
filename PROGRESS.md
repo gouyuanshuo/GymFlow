@@ -2,15 +2,228 @@
 
 ## Current status
 
+- Completed: reusable Exercise Library with metadata/default editing, search/filter/sort, safe archive/restore/delete behavior, plan integration, exact legacy linking, and immutable historical snapshots.
+- Completed: monthly History calendar with local start-day grouping, multiple workouts per day, accessible indicators, month navigation, day details, and monthly totals.
+- Completed: local workout-result sharing from completion and History with a dedicated 1080 × 1350 card, 10 offline backgrounds, stable randomization, and the native iOS share sheet.
+- Verified: 64/64 selected simulator checks, 63/63 physical-iPhone domain tests, clean simulator/physical builds, signed install, and launch over the existing device store.
 - Completed: interactive Lock Screen/Dynamic Island workout actions and coordinated stronger rest-completion feedback.
 - Completed: first-release Milestones 0–8 and continuous-experience Upgrade Milestones 1–9.
 - Completed: root-layout bug fix and defensive Live Activity lifecycle implementation with unit/UI verification.
 - Completed: deterministic first-tap plan routing, stable Now Playing presentation ownership, and history-based duration estimation with simulator and physical-iPhone verification.
 - Completed: Active Workout exercise-screen redesign with responsive set cards, compact reference/timer UI, safe-area player/navigation controls, and simulator plus physical-iPhone verification.
-- Current work: native Live Activity controls use the least restrictive supported App Intent policy; physical testing confirms iOS still authenticates third-party controls on a genuinely locked device by design.
-- Next action: complete the remaining human-only Dynamic Island and alert-intensity acceptance pass on the installed iPhone build.
+- Current work: sharing implementation, simulator verification, and signed iOS build are complete; the paired iPhone is currently offline and could not accept the sharing build.
+- Next action: reconnect/unlock the paired iPhone and perform the remaining physical sharing plus existing Exercise Library/Calendar and Dynamic Island/alert-intensity gestures.
 
 ## Engineering log
+
+### 2026-08-14 — Workout sharing rendering and integration
+
+- Added the dedicated 4:5 workout share card, 10 offline programmatic background styles, stable/manual background selection, 1080 × 1350 `ImageRenderer` export, and native `UIActivityViewController` sharing.
+- Added Share Workout entry points to both the completion summary and historical workout detail without changing persisted models.
+- The integrated simulator compile completed successfully with `/tmp/GymFlowShareIntegrationDerivedData`.
+- The first focused sharing-test invocation did not run because simulator `8869D2AC-B6CA-4221-B884-F2A3779A6CC8` was no longer installed. Xcode reported destination-not-found (exit 70); no test cases executed. The suite was rerouted to the currently installed iPhone 17 destination `8869D2AC-6D86-4A70-BB63-556862EDD7BC`.
+- The rerouted sharing suite first stopped at test-source compilation because the new image-dimension assertions referenced `UIImage.cgImage`/`CGImage` without directly importing UIKit and CoreGraphics. Added the explicit test-only imports; production code was unaffected.
+- The first Dark Mode/accessibility-extra-large sharing UI run reached historical workout detail, then failed because the test waited for an off-screen Share Workout list row without scrolling. The production row remained in its scrollable List; the test helper now scrolls either SwiftUI ScrollView or List/collection containers before asserting reachability.
+- The first manual-thumbnail UI assertion discovered an off-screen picker button through the accessibility tree and attempted to tap it before it was hittable. Added stable preview/picker scroll identifiers and explicit scroll-to-hit behavior; product selection logic was unchanged.
+
+Implementation and product result:
+
+- Added an immutable, non-persisted `WorkoutShareSummary` and builder. Only completed session snapshots are accepted. Private notes, playlist/music data, identifiers, file paths, device data, and plan objects are never included.
+- Duration uses the stable completed interval; exercise/set/repetition counts and volume use GymFlow's existing session properties. Volume therefore remains `weight × repetitions` across every completed set, including a completed warm-up, matching completion and History.
+- Exercise highlights are deterministic: aggregate completed-set volume by historical exercise record, select each record's strongest `weight × repetitions` set, sort by aggregate volume with workout order as tie-breaker, and keep the top three.
+- Added one dedicated premium SwiftUI card with controlled two-line titles, a 2 × 2 metric hierarchy, three concise highlights, accessibility summary, and fixed exported typography independent of app appearance.
+- Added ten original, programmatic, offline themes: Obsidian, Electric Blue, Velocity Red, Ultraviolet, Graphite, Solar Flare, Midnight Grid, Arctic, Evergreen, and Black Gold. Initial selection happens once per preview; Randomize excludes the current theme; manual selection is immediate.
+- `WorkoutShareRenderer` renders 360 × 450 points at 3× with `ImageRenderer`, checks the result, and exports exactly 1080 × 1350 pixels. No visible-screen capture or third-party dependency is used.
+- `UIActivityViewController` receives the actual `UIImage` through a `UIActivityItemSource` with GymFlow title/thumbnail metadata. Simulator verification exposed Copy, Save to Files, system extensions, and the native close control.
+- Added clear Share Workout actions to completion and historical workout detail. Both construct from the same completed-session snapshot and present the same preview; sharing never opens automatically.
+- Inspected the retained original-resolution exported PNG from the test result. The 4:5 crop, two-line workout title, metric grid, three highlights, footer, and translucent legibility panels were sharp and unclipped.
+
+Focused sharing logic/render command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=8869D2AC-6D86-4A70-BB63-556862EDD7BC' -derivedDataPath /tmp/GymFlowShareTestsDerivedData CODE_SIGNING_ALLOWED=NO -only-testing:GymFlowTests/WorkoutSharingTests test -quiet
+```
+
+Result: exit 0, **12/12 passed**. This includes summary metrics/privacy, formatting, deterministic highlights, invalid/empty handling, long titles, stable/non-repeating backgrounds, historical snapshots, exact export dimensions, and all-background stress rendering.
+
+Focused completion + History UI command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=8869D2AC-6D86-4A70-BB63-556862EDD7BC' -derivedDataPath /tmp/GymFlowShareUITestsDerivedData CODE_SIGNING_ALLOWED=NO -only-testing:GymFlowUITests/GymFlowUITests/testWorkoutSharingFromCompletionAndHistory -parallel-testing-enabled NO test -quiet
+```
+
+Result: exit 0, **1/1 passed**. The test completed a real workout, opened completion sharing, verified a single initial background, randomized without changing the card data, opened/dismissed the native activity sheet, returned to Today, opened the resulting History record, and repeated preview/randomize/native sharing.
+
+Final selected test command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=8869D2AC-6D86-4A70-BB63-556862EDD7BC' -derivedDataPath /tmp/GymFlowShareFinalTestsDerivedData CODE_SIGNING_ALLOWED=NO -only-testing:GymFlowTests -only-testing:GymFlowUITests/GymFlowUITests/testWorkoutSharingFromCompletionAndHistory -parallel-testing-enabled NO test -quiet
+```
+
+Result: exit 0, **77/77 passed**, zero failures or skips (76 domain/render checks plus the sharing UI path). Xcode emitted only its known non-fatal local LLDB version-store warning.
+
+Dark Mode and accessibility-extra-large UI command used the same focused UI selection after:
+
+```bash
+xcrun simctl ui 8869D2AC-6D86-4A70-BB63-556862EDD7BC appearance dark
+xcrun simctl ui 8869D2AC-6D86-4A70-BB63-556862EDD7BC content_size accessibility-extra-large
+```
+
+Final result after correcting the off-screen-row test assumption: exit 0, **1/1 passed** for both completion and History sharing at accessibility-extra-large Dynamic Type in Dark Mode.
+
+Final clean simulator build:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowShareFinalBuildDerivedData CODE_SIGNING_ALLOWED=NO clean build -quiet
+```
+
+Result: exit 0, **CLEAN BUILD SUCCEEDED**.
+
+Signed iOS build and physical status:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -configuration Debug -destination 'generic/platform=iOS' -derivedDataPath /tmp/GymFlowSharePhysicalDerivedData build -quiet
+xcrun devicectl device install app --device 00008120-001479921160201E --timeout 30 /tmp/GymFlowSharePhysicalDerivedData/Build/Products/Debug-iphoneos/GymFlow.app
+```
+
+Build result: exit 0, **SIGNED BUILD SUCCEEDED** with Apple Development identity and the embedded Live Activity extension preserved. Install result: exit 1 because CoreDevice reports paired iPhone 14 Pro Max `nv` as unavailable and cannot locate its device tunnel. Therefore no physical install, launch, native share destination, saved image, Dark Mode, or long-content gesture is claimed in this pass. Those physical observations remain pending until the phone is unlocked and attached/reachable; the complete equivalent flow passed in Simulator and the actual export was inspected at full resolution.
+
+Exact-final-tree verification after the manual-picker accessibility identifiers were added:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=8869D2AC-6D86-4A70-BB63-556862EDD7BC' -derivedDataPath /tmp/GymFlowShareExactFinalUnitTestsDerivedData CODE_SIGNING_ALLOWED=NO -only-testing:GymFlowTests -parallel-testing-enabled NO test -quiet
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=8869D2AC-6D86-4A70-BB63-556862EDD7BC' -derivedDataPath /tmp/GymFlowShareFinalManualSelectionUITestsDerivedData CODE_SIGNING_ALLOWED=NO -only-testing:GymFlowUITests/GymFlowUITests/testWorkoutSharingFromCompletionAndHistory -parallel-testing-enabled NO test -quiet
+```
+
+Exact-final result: **76/76 domain/render tests passed** and **1/1 sharing UI test passed**, with zero failures or skips. The UI path now includes manual thumbnail choice before non-repeating Randomize. A redundant attempt to combine both selections into one later Xcode invocation stalled for 212 seconds before any test runner materialized (`XCTHTestOperationCoordinator` waiting for workers) and was interrupted with exit 75; it did not execute tests and does not supersede the successful separate exact-final runs.
+
+The exact final production tree then clean-built again for Simulator at `/tmp/GymFlowShareFinalBuild2DerivedData` and signed arm64 iOS at `/tmp/GymFlowSharePhysicalFinalDerivedData`, both exit 0. The final install retry again returned CoreDevice error 1011 because the paired iPhone remained unavailable. `git diff --check` passed.
+
+### 2026-08-14 — Workout result sharing audit and baseline
+
+- Inspected `WorkoutSession`, `ExerciseRecord`, `WorkoutSetRecord`, `WorkoutCompletionView`, `WorkoutHistoryDetailView`, `ActiveWorkoutView` finish routing, metric formatters, preview fixtures, asset catalog, project synchronization, tests, and the existing uncommitted Exercise Library/Calendar work.
+- Existing architecture is already snapshot-safe: completed sessions own copied plan/exercise names and set values. Sharing can therefore use a non-persisted immutable summary without changing SwiftData, migrations, plans, history, audio, timers, restoration, or Live Activities.
+- Existing volume is the sum of `weight × repetitions` for every completed set, including completed warm-up sets. The share card will use that exact value to stay consistent with completion/history; no new PR inference will be added because GymFlow has no mature PR detector.
+- Rendering decision: one dedicated 4:5 SwiftUI card at 360 × 450 points, rendered by native `ImageRenderer` at scale 3 for a 1080 × 1350 image. Ten original programmatic styles avoid bundled-photo licensing, runtime network access, and app-size growth.
+- Presentation decision: completion and history construct the same stable summary, show a dedicated preview with one-time random initial state plus explicit manual/random changes, and open native `UIActivityViewController`. Workout notes, music, identifiers, paths, and device data are excluded.
+- Preserved the existing dirty worktree and unrelated untracked screenshot; sharing changes will be additive and scoped.
+
+Baseline command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowSharingBaselineDerivedData CODE_SIGNING_ALLOWED=NO build -quiet
+```
+
+Baseline result: exit 0, **BUILD SUCCEEDED**. Xcode emitted only its existing generic-destination metadata warning.
+
+The first share-summary build succeeded but exposed a Swift concurrency warning from passing an actor-isolated comparator by function reference into `max(by:)`; inlining the comparator removed the warning without changing selection semantics. The first complete unit run then found one over-specific long-title assertion: trimming the final partial word-space produced a 63-character result beneath the intended 64-character maximum. The test now verifies the actual invariant (at most 64 characters plus ellipsis), with production truncation unchanged.
+
+### 2026-08-14 — Exercise Library and Workout Calendar audit/baseline
+
+- Read `AGENTS.md`, `PROJECT_SPEC.md`, `PLANS.md`, `PROGRESS.md`, and `README.md`; inspected the complete workout schema, root tabs, Settings, Plans/editor/picker, WorkoutService snapshot creation, History/detail/progress, seeding, SwiftData container, previews, and test target.
+- Existing architecture: `ExerciseDefinition` is already independent and `PlannedExercise`/`ExerciseRecord` store optional definition UUIDs plus name snapshots. Completed sessions are deep snapshots, so later plan edits already cannot rewrite history. The first-release picker creates custom definitions, but there is no management screen, archive state, metadata defaults, duplicate validation, or calendar.
+- Migration decision: retain the persisted `muscleGroup` property rather than rename it, and add only default-backed or optional fields. Keep identifier references instead of adding a new SwiftData relationship, preserving the existing plan/session delete rules and missing-definition fallback. Legacy plan rows are linked only by exact normalized names; completed exercise records are never migrated or rewritten.
+- Added exercise secondary muscles, optional sets/repetitions/rest defaults, archive state, and update timestamp. Added pure validation/archive/usage/snapshot synchronization logic. Expanded the idempotent built-in library to a manageable set and added a one-time built-in metadata upgrade plus exact legacy plan linking.
+- The only pre-existing workspace change is an untracked August 6 screenshot; it remains untouched.
+
+Baseline command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowExerciseCalendarBaselineDerivedData CODE_SIGNING_ALLOWED=NO build -quiet
+```
+
+Baseline result: exit 0, **BUILD SUCCEEDED**. Xcode emitted only the existing generic-destination metadata warning.
+
+Exercise model command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowExerciseModelDerivedData CODE_SIGNING_ALLOWED=NO build -quiet
+```
+
+Result: exit 0, **BUILD SUCCEEDED** after the additive schema, library service, built-in upgrade, and legacy plan linking changes.
+
+Exercise Library/plan integration command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowExerciseLibraryDerivedData CODE_SIGNING_ALLOWED=NO build -quiet
+```
+
+Result: exit 0, **BUILD SUCCEEDED** with the Settings library route, editor/detail/list, archive behavior, recent performance, filtered plan picker, exercise defaults, and current-definition name resolution.
+
+Calendar milestone command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowWorkoutCalendarDerivedData CODE_SIGNING_ALLOWED=NO build -quiet
+```
+
+Result: exit 0, **BUILD SUCCEEDED** with the History List/Calendar switch, month grid, navigation, indicators, day sheet, and monthly summary.
+
+The first focused-test attempt stopped at test-source compilation because Swift Testing does not permit `try` on the right side of the comparison operator inside `#expect`. The expected date is now evaluated before the macro; no production code changed.
+
+### 2026-08-14 — Exercise Library and Workout Calendar implementation/final verification
+
+- Added Settings → Exercise Library with available/archived scopes, name search, muscle/equipment filters, name/muscle/equipment sorting, built-in/custom labels, empty states, archive/restore swipe actions, and a safe details route. Unused custom exercises can be hard-deleted; used custom and all built-in exercises use archive to protect existing data and default-library stability.
+- Added a shared editor for creation and editing with primary/secondary muscles, equipment, optional sets/repetitions/rest defaults, notes, whitespace trimming, and case/diacritic-insensitive exact duplicate rejection. Definition edits persist across contexts. Renames synchronize only linked `PlannedExercise` fallback snapshots and never touch `ExerciseRecord` history snapshots.
+- Expanded the built-in library to 38 manageable strength/core/cardio definitions. A versioned one-time upgrade updates pre-feature built-ins and inserts missing v1 definitions without duplicates. Future launches do not restore explicitly deleted workout data. Legacy planned rows link only through exact normalized-name matches and retain their fallback snapshots when no match exists.
+- Replaced the old plan picker with the available-library search/filter flow and in-flow full custom editor. Definition defaults seed new plan rows; plan-specific targets remain ordinary editable copies. Archived definitions disappear from selection but remain readable in plans/history.
+- Added History List/Calendar presentation, a Monday-first custom SwiftUI month grid, previous/next/current navigation, subtle one/two/+ indicators, accessible date/workout labels, and monthly workouts/training-days/time totals. One in-memory dictionary groups only completed sessions by `Calendar.current.startOfDay(for: startedAt)`; cancelled, active, and planned sessions are excluded, and cross-midnight workouts stay on their local start date.
+- Added a day sheet for empty dates and inline single/multiple workout details with duration, volume, exercise/set snapshots, and a route to the existing full history detail.
+- Simulator UI verification used the existing migrated app store in Dark Mode. Library search opened the upgraded Barbell Bench Press definition with 4 × 8 / 180-second defaults, calendar month navigation worked, and day routing showed the correct empty/workout state. The focused path passed again at accessibility-extra-large Dynamic Type after the test was made to scroll Settings for the off-screen library row.
+- Production/test audit found no new TODO/FIXME, `fatalError`, force-try/cast, debug print, whitespace, relationship, cascade, or network/backend issue. The unrelated untracked screenshot remains untouched.
+
+Final selected simulator test command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=8869D2AC-6D86-4A70-BB63-556862EDD7BC' -derivedDataPath /tmp/GymFlowExerciseCalendarFinalAllTestsDerivedData CODE_SIGNING_ALLOWED=NO -only-testing:GymFlowTests -only-testing:GymFlowUITests/GymFlowUITests/testExerciseLibraryAndCalendarNavigation -parallel-testing-enabled NO test -quiet
+```
+
+Result: exit 0, **64/64 passed** (63 domain tests plus the focused library/calendar UI path), zero failures or skips on iPhone 17 / iOS 26.5. Xcode emitted its existing non-fatal local LLDB version-store warning.
+
+Accessibility/Dark Mode UI command:
+
+```bash
+xcrun simctl ui 8869D2AC-6D86-4A70-BB63-556862EDD7BC content_size accessibility-extra-large
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=8869D2AC-6D86-4A70-BB63-556862EDD7BC' -derivedDataPath /tmp/GymFlowExerciseCalendarAccessibilityUITest2DerivedData CODE_SIGNING_ALLOWED=NO -only-testing:GymFlowUITests/GymFlowUITests/testExerciseLibraryAndCalendarNavigation -parallel-testing-enabled NO test -quiet
+xcrun simctl ui 8869D2AC-6D86-4A70-BB63-556862EDD7BC content_size large
+```
+
+Result: exit 0, **1/1 passed** in Dark Mode at accessibility-extra-large text; the Simulator was restored to Large text afterward. The first accessibility attempt failed only because the test expected an off-screen Settings row without scrolling; making the test scroll fixed the automation without changing product layout.
+
+Final clean simulator build:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowExerciseCalendarFinalBuildDerivedData CODE_SIGNING_ALLOWED=NO clean build -quiet
+```
+
+Result: exit 0, **CLEAN BUILD SUCCEEDED**, including the embedded Live Activity extension.
+
+Signed physical build/install/launch:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -configuration Debug -destination 'platform=iOS,id=00008120-001479921160201E' -derivedDataPath /tmp/GymFlowExerciseCalendarPhysicalDerivedData -allowProvisioningUpdates clean build -quiet
+xcrun devicectl device install app --device 00008120-001479921160201E --timeout 60 /tmp/GymFlowExerciseCalendarPhysicalDerivedData/Build/Products/Debug-iphoneos/GymFlow.app
+xcrun devicectl device process launch --device 00008120-001479921160201E --timeout 30 --terminate-existing com.gouyuanshuo.GymFlow
+```
+
+Result: exit 0 throughout, **SIGNED CLEAN BUILD, INSTALL, AND LAUNCH SUCCEEDED** on `nv` (iPhone 14 Pro Max, iOS 26.6). Installation preserved the existing application data and the final relaunch also succeeded after the UI-runner attempt.
+
+Physical domain-test command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS,id=00008120-001479921160201E' -derivedDataPath /tmp/GymFlowExerciseCalendarPhysicalTestsDerivedData -allowProvisioningUpdates -only-testing:GymFlowTests -parallel-testing-enabled NO test -quiet
+```
+
+Result: exit 0, **63/63 passed**, zero failures or skips on the iPhone 14 Pro Max / iOS 26.6.
+
+Physical UI attempt:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS,id=00008120-001479921160201E' -derivedDataPath /tmp/GymFlowExerciseCalendarPhysicalUITestsDerivedData -allowProvisioningUpdates -only-testing:GymFlowUITests/GymFlowUITests/testExerciseLibraryAndCalendarNavigation -parallel-testing-enabled NO test -quiet
+```
+
+Result: exit 65 before the first assertion because the XCUITest runner timed out enabling automation mode. Therefore physical search/filter/create/edit/archive/restore/plan/workout/calendar gestures, long-name inspection, and hands-on Dark Mode observations are **not claimed** in this pass; business logic is verified on-device and the same read-only UI route passes in Simulator.
+
+Files changed/added: `GymFlow/Models/WorkoutModels.swift`, `GymFlow/Services/ExerciseLibraryService.swift`, `GymFlow/Services/SampleDataSeeder.swift`, `GymFlow/Utilities/WorkoutHistoryGrouper.swift`, `GymFlow/ViewModels/PlanDraft.swift`, `GymFlow/Views/Exercises/ExerciseLibraryView.swift`, `ExerciseEditorView.swift`, `ExerciseDetailView.swift`, `GymFlow/Views/Plans/ExercisePickerView.swift`, `PlanEditorView.swift`, `GymFlow/Views/Settings/SettingsView.swift`, `GymFlow/Views/History/HistoryView.swift`, `WorkoutCalendarView.swift`, `CalendarDayDetailView.swift`, `GymFlowTests/ExerciseLibraryCalendarTests.swift`, `GymFlowUITests/GymFlowUITests.swift`, `PROJECT_SPEC.md`, `PLANS.md`, `PROGRESS.md`, and `README.md`.
 
 ### 2026-08-12 — Locked Live Activity button authentication correction
 

@@ -6,6 +6,7 @@ struct WorkoutCompletionView: View {
     let session: WorkoutSession
     let onDone: () -> Void
     @State private var errorMessage: String?
+    @State private var sharePresentation: WorkoutSharePresentation?
 
     var body: some View {
         NavigationStack {
@@ -35,6 +36,16 @@ struct WorkoutCompletionView: View {
                         SummaryMetric(title: "Workout Playlist", value: playlistName, icon: "music.note.list")
                     }
 
+                    Button {
+                        prepareShare()
+                    } label: {
+                        Label("Share Workout", systemImage: "square.and.arrow.up")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .accessibilityIdentifier("share-completed-workout")
+
                     VStack(alignment: .leading) {
                         Text("Workout Notes").font(.headline)
                         TextEditor(text: Binding(
@@ -51,9 +62,24 @@ struct WorkoutCompletionView: View {
                 .padding()
             }
             .navigationBarBackButtonHidden()
-            .alert("Couldn’t Save Notes", isPresented: Binding(
+            .sheet(item: $sharePresentation) { presentation in
+                NavigationStack {
+                    WorkoutSharePreviewView(summary: presentation.summary)
+                }
+            }
+            .alert("Workout Error", isPresented: Binding(
                 get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
             )) { Button("OK", role: .cancel) { } } message: { Text(errorMessage ?? "Unknown error") }
+        }
+    }
+
+    private func prepareShare() {
+        do {
+            sharePresentation = WorkoutSharePresentation(
+                summary: try WorkoutShareSummaryBuilder.build(from: session)
+            )
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 

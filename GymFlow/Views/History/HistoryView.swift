@@ -4,6 +4,7 @@ import SwiftUI
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
+    @State private var presentation = HistoryPresentation.list
     @State private var searchText = ""
     @State private var pendingDeletion: WorkoutSession?
     @State private var errorMessage: String?
@@ -21,31 +22,27 @@ struct HistoryView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if completedSessions.isEmpty {
-                    ContentUnavailableView(
-                        searchText.isEmpty ? "No Workout History" : "No Matches",
-                        systemImage: "clock.arrow.circlepath",
-                        description: Text(searchText.isEmpty
-                            ? "Finished workouts will appear here."
-                            : "Try another plan or exercise name.")
-                    )
-                } else {
-                    List(completedSessions) { session in
-                        NavigationLink(value: session) {
-                            HistoryRow(session: session)
-                        }
-                        .swipeActions {
-                            Button("Delete", role: .destructive) { pendingDeletion = session }
-                        }
+            VStack(spacing: 0) {
+                Picker("History presentation", selection: $presentation) {
+                    ForEach(HistoryPresentation.allCases) { value in
+                        Text(value.title).tag(value)
                     }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+
+                if presentation == .list {
+                    historyList
+                        .searchable(text: $searchText, prompt: "Plan or exercise")
+                } else {
+                    WorkoutCalendarView(sessions: sessions)
                 }
             }
             .navigationTitle("History")
             .navigationDestination(for: WorkoutSession.self) { session in
                 WorkoutHistoryDetailView(session: session)
             }
-            .searchable(text: $searchText, prompt: "Plan or exercise")
             .alert("Delete Workout History?", isPresented: Binding(
                 get: { pendingDeletion != nil }, set: { if !$0 { pendingDeletion = nil } }
             )) {
@@ -58,6 +55,29 @@ struct HistoryView: View {
         }
     }
 
+    @ViewBuilder
+    private var historyList: some View {
+        if completedSessions.isEmpty {
+            ContentUnavailableView(
+                searchText.isEmpty ? "No Workout History" : "No Matches",
+                systemImage: "clock.arrow.circlepath",
+                description: Text(searchText.isEmpty
+                    ? "Finished workouts will appear here."
+                    : "Try another plan or exercise name.")
+            )
+        } else {
+            List(completedSessions) { session in
+                NavigationLink(value: session) {
+                    HistoryRow(session: session)
+                }
+                .accessibilityIdentifier("history-workout-row")
+                .swipeActions {
+                    Button("Delete", role: .destructive) { pendingDeletion = session }
+                }
+            }
+        }
+    }
+
     private func deletePending() {
         guard let session = pendingDeletion else { return }
         modelContext.delete(session)
@@ -65,6 +85,14 @@ struct HistoryView: View {
         do { try modelContext.save() }
         catch { errorMessage = "The workout could not be deleted. \(error.localizedDescription)" }
     }
+}
+
+private enum HistoryPresentation: String, CaseIterable, Identifiable {
+    case list
+    case calendar
+
+    var id: String { rawValue }
+    var title: String { self == .list ? "List" : "Calendar" }
 }
 
 private struct HistoryRow: View {

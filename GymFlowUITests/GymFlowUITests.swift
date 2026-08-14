@@ -307,6 +307,123 @@ final class GymFlowUITests: XCTestCase {
     }
 
     @MainActor
+    func testExerciseLibraryAndCalendarNavigation() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let settingsTab = app.tabBars.buttons["Settings"]
+        XCTAssertTrue(settingsTab.waitForExistence(timeout: 10))
+        settingsTab.tap()
+        let exerciseLibrary = app.buttons["Exercise Library"]
+        var settingsScrollAttempts = 0
+        while !exerciseLibrary.exists, settingsScrollAttempts < 4 {
+            app.swipeUp()
+            settingsScrollAttempts += 1
+        }
+        XCTAssertTrue(exerciseLibrary.waitForExistence(timeout: 5))
+        exerciseLibrary.tap()
+        XCTAssertTrue(app.navigationBars["Exercise Library"].waitForExistence(timeout: 5))
+
+        let search = app.searchFields["Exercise name"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("Bench Press")
+        let rows = app.buttons.matching(identifier: "exercise-library-row")
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 5))
+        rows.firstMatch.tap()
+        XCTAssertTrue(app.buttons["Edit"].waitForExistence(timeout: 5))
+        keepScreenshot(named: "Exercise Library detail")
+
+        let historyTab = app.tabBars.buttons["History"]
+        XCTAssertTrue(historyTab.waitForExistence(timeout: 5))
+        historyTab.tap()
+        XCTAssertTrue(app.navigationBars["History"].waitForExistence(timeout: 5))
+        app.buttons["Calendar"].tap()
+        XCTAssertTrue(app.scrollViews["workout-calendar"].waitForExistence(timeout: 5))
+
+        let nextMonth = app.buttons["Next Month"]
+        let previousMonth = app.buttons["Previous Month"]
+        XCTAssertTrue(nextMonth.exists)
+        XCTAssertTrue(previousMonth.exists)
+        previousMonth.tap()
+        XCTAssertTrue(app.buttons["Return to Current Month"].waitForExistence(timeout: 3))
+        nextMonth.tap()
+        keepScreenshot(named: "Workout Calendar month")
+
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        let todayIdentifier = "calendar-day-\(components.year ?? 0)-\(components.month ?? 0)-\(components.day ?? 0)"
+        let today = app.buttons[todayIdentifier]
+        XCTAssertTrue(today.waitForExistence(timeout: 5))
+        let workoutDay = app.buttons.matching(NSPredicate(
+            format: "identifier BEGINSWITH 'calendar-day-' AND NOT label CONTAINS[c] 'no workouts'"
+        )).firstMatch
+        let expectsWorkout = workoutDay.waitForExistence(timeout: 2)
+        (expectsWorkout ? workoutDay : today).tap()
+        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5))
+        if expectsWorkout {
+            XCTAssertTrue(app.buttons["Open Workout Details"].firstMatch.waitForExistence(timeout: 5))
+        } else {
+            XCTAssertTrue(app.staticTexts["No Workout Recorded"].waitForExistence(timeout: 5))
+        }
+        keepScreenshot(named: "Workout Calendar day")
+        app.buttons["Done"].tap()
+    }
+
+    @MainActor
+    func testWorkoutSharingFromCompletionAndHistory() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let resume = app.buttons["Resume Workout"]
+        if resume.waitForExistence(timeout: 3) {
+            resume.tap()
+            cancelActiveWorkout(in: app)
+        }
+
+        let start = app.buttons["Start Workout"]
+        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        start.tap()
+        allowRestTimerNotificationsIfNeeded()
+
+        let completeSet = app.buttons["Complete set 1"]
+        XCTAssertTrue(completeSet.waitForExistence(timeout: 10))
+        completeSet.tap()
+
+        let finish = app.buttons["Finish"]
+        XCTAssertTrue(finish.waitForExistence(timeout: 5))
+        finish.tap()
+        let confirmFinish = app.buttons["Finish Workout"].firstMatch
+        XCTAssertTrue(confirmFinish.waitForExistence(timeout: 5))
+        confirmFinish.tap()
+        XCTAssertTrue(app.staticTexts["Workout Complete"].waitForExistence(timeout: 10))
+
+        let completionShare = app.buttons["share-completed-workout"]
+        scrollToHittable(completionShare, in: app)
+        completionShare.tap()
+        verifySharePreviewAndOpenActivitySheet(in: app, randomize: true)
+        dismissActivitySheet(in: app)
+        app.buttons["Done"].tap()
+
+        let saveAndReturn = app.buttons["Save and Return to Today"]
+        scrollToHittable(saveAndReturn, in: app)
+        saveAndReturn.tap()
+        XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 10))
+
+        let historyTab = app.tabBars.buttons["History"]
+        historyTab.tap()
+        XCTAssertTrue(app.navigationBars["History"].waitForExistence(timeout: 5))
+        let firstWorkout = app.buttons.matching(identifier: "history-workout-row").firstMatch
+        XCTAssertTrue(firstWorkout.waitForExistence(timeout: 5))
+        firstWorkout.tap()
+
+        let historyShare = app.buttons["share-history-workout"]
+        scrollToHittable(historyShare, in: app)
+        historyShare.tap()
+        verifySharePreviewAndOpenActivitySheet(in: app, randomize: true)
+        dismissActivitySheet(in: app)
+    }
+
+    @MainActor
     private func cancelActiveWorkout(in app: XCUIApplication) {
         let cancelTimer = app.buttons["Cancel Timer"]
         if cancelTimer.exists {
@@ -324,6 +441,93 @@ final class GymFlowUITests: XCTestCase {
         XCTAssertTrue(confirmation.waitForExistence(timeout: 3))
         confirmation.tap()
         XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    private func verifySharePreviewAndOpenActivitySheet(
+        in app: XCUIApplication,
+        randomize: Bool
+    ) {
+        XCTAssertTrue(app.navigationBars["Share Preview"].waitForExistence(timeout: 10))
+        let card = app.otherElements["workout-share-card"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        let workoutDescription = card.label
+        XCTAssertFalse(workoutDescription.isEmpty)
+
+        let selectedBackgrounds = app.buttons.matching(NSPredicate(
+            format: "identifier BEGINSWITH 'share-background-' AND value == 'Selected'"
+        ))
+        XCTAssertEqual(selectedBackgrounds.count, 1)
+        let initialBackground = selectedBackgrounds.firstMatch.identifier
+
+        let manualBackground = app.buttons.matching(NSPredicate(
+            format: "identifier BEGINSWITH 'share-background-' AND value == 'Not selected'"
+        )).firstMatch
+        XCTAssertTrue(manualBackground.waitForExistence(timeout: 5))
+        XCTAssertNotEqual(manualBackground.identifier, initialBackground)
+        let previewScroll = app.scrollViews["workout-share-preview-scroll"]
+        var previewScrollAttempts = 0
+        while !manualBackground.isHittable, previewScrollAttempts < 6 {
+            previewScroll.swipeUp()
+            previewScrollAttempts += 1
+        }
+        XCTAssertTrue(manualBackground.isHittable)
+        let manuallySelectedIdentifier = manualBackground.identifier
+        manualBackground.tap()
+        let selectedManualBackground = app.buttons.matching(NSPredicate(
+            format: "identifier == %@ AND value == 'Selected'",
+            manuallySelectedIdentifier
+        )).firstMatch
+        XCTAssertTrue(selectedManualBackground.waitForExistence(timeout: 5))
+        XCTAssertEqual(card.label, workoutDescription)
+
+        if randomize {
+            app.buttons["randomize-share-background"].tap()
+            let changedBackground = app.buttons.matching(NSPredicate(
+                format: "identifier BEGINSWITH 'share-background-' AND value == 'Selected' AND identifier != %@",
+                manuallySelectedIdentifier
+            )).firstMatch
+            XCTAssertTrue(changedBackground.waitForExistence(timeout: 5))
+            XCTAssertEqual(card.label, workoutDescription)
+        }
+
+        keepScreenshot(named: "Workout share preview")
+        app.buttons["share-workout-image"].tap()
+        let activityList = app.otherElements["ActivityListView"]
+        if !activityList.waitForExistence(timeout: 10) {
+            XCTAssertTrue(
+                app.buttons["Copy"].exists
+                    || app.buttons["Save to Files"].exists
+                    || app.buttons["Close"].exists,
+                "The native iOS activity sheet should open"
+            )
+        }
+        keepScreenshot(named: "Workout native share sheet")
+    }
+
+    @MainActor
+    private func dismissActivitySheet(in app: XCUIApplication) {
+        let close = app.buttons["Close"].firstMatch
+        if close.waitForExistence(timeout: 2) {
+            close.tap()
+        } else {
+            app.swipeDown()
+        }
+        XCTAssertTrue(app.navigationBars["Share Preview"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    private func scrollToHittable(_ element: XCUIElement, in app: XCUIApplication) {
+        let scrollView = app.scrollViews.firstMatch.exists
+            ? app.scrollViews.firstMatch
+            : app.collectionViews.firstMatch
+        var attempts = 0
+        while !element.isHittable, attempts < 10 {
+            scrollView.swipeUp()
+            attempts += 1
+        }
+        XCTAssertTrue(element.exists)
+        XCTAssertTrue(element.isHittable)
     }
 
     @MainActor
