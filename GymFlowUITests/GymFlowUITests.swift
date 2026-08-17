@@ -50,8 +50,8 @@ final class GymFlowUITests: XCTestCase {
         let firstCard = app.otherElements["workout-set-card-1"]
         XCTAssertTrue(firstCard.waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Set 1"].exists)
-        XCTAssertTrue(app.textFields["Set 1 weight"].exists)
-        XCTAssertTrue(app.textFields["Set 1 repetitions"].exists)
+        XCTAssertTrue(app.buttons["set-1-weight-picker"].exists)
+        XCTAssertTrue(app.buttons["set-1-repetitions-picker"].exists)
         XCTAssertTrue(
             app.buttons["Complete set 1"].exists
                 || app.buttons["Mark set 1 incomplete"].exists
@@ -64,13 +64,47 @@ final class GymFlowUITests: XCTestCase {
         warmup.tap()
         XCTAssertNotEqual(warmup.value as? String, initialWarmupValue)
 
-        assertElement(app.textFields["Set 1 weight"], isInside: firstCard)
-        assertElement(app.textFields["Set 1 repetitions"], isInside: firstCard)
+        assertElement(app.buttons["set-1-weight-picker"], isInside: firstCard)
+        assertElement(app.buttons["set-1-repetitions-picker"], isInside: firstCard)
         let initialCompletionButton = app.buttons["Complete set 1"].exists
             ? app.buttons["Complete set 1"]
             : app.buttons["Mark set 1 incomplete"]
         assertElement(initialCompletionButton, isInside: firstCard)
         assertElement(warmup, isInside: firstCard)
+
+        let weightButton = app.buttons["set-1-weight-picker"]
+        let initialWeight = weightButton.value as? String
+        weightButton.tap()
+        let weightWheel = app.pickerWheels.firstMatch
+        XCTAssertTrue(weightWheel.waitForExistence(timeout: 5))
+        weightWheel.adjust(toPickerWheelValue: "72.5")
+        app.buttons["cancel-workout-value"].tap()
+        XCTAssertEqual(weightButton.value as? String, initialWeight)
+
+        weightButton.tap()
+        XCTAssertTrue(weightWheel.waitForExistence(timeout: 5))
+        weightWheel.adjust(toPickerWheelValue: "72.5")
+        app.buttons["confirm-workout-value"].tap()
+        XCTAssertEqual(weightButton.value as? String, "72.5 kilograms")
+
+        weightButton.tap()
+        XCTAssertTrue(weightWheel.waitForExistence(timeout: 5))
+        XCTAssertEqual(weightWheel.value as? String, "72.5")
+        app.buttons["cancel-workout-value"].tap()
+
+        let repetitionsButton = app.buttons["set-1-repetitions-picker"]
+        repetitionsButton.tap()
+        let repetitionsWheel = app.pickerWheels.firstMatch
+        XCTAssertTrue(repetitionsWheel.waitForExistence(timeout: 5))
+        repetitionsWheel.adjust(toPickerWheelValue: "10")
+        app.buttons["confirm-workout-value"].tap()
+        XCTAssertEqual(repetitionsButton.value as? String, "10 repetitions")
+
+        repetitionsButton.tap()
+        XCTAssertTrue(repetitionsWheel.waitForExistence(timeout: 5))
+        repetitionsWheel.adjust(toPickerWheelValue: "11")
+        app.buttons["cancel-workout-value"].tap()
+        XCTAssertEqual(repetitionsButton.value as? String, "10 repetitions")
         keepScreenshot(named: "Active Workout set card")
 
         let setCards = app.otherElements.matching(
@@ -134,13 +168,44 @@ final class GymFlowUITests: XCTestCase {
         let firstCard = app.otherElements["workout-set-card-1"]
         XCTAssertTrue(firstCard.waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Set 1"].exists)
-        XCTAssertTrue(app.textFields["Set 1 weight"].exists)
-        XCTAssertTrue(app.textFields["Set 1 repetitions"].exists)
+        XCTAssertTrue(app.buttons["set-1-weight-picker"].exists)
+        XCTAssertTrue(app.buttons["set-1-repetitions-picker"].exists)
         XCTAssertTrue(app.buttons["Set 1 warm-up"].exists)
         XCTAssertFalse(app.staticTexts["Done"].exists)
         XCTAssertTrue(app.buttons["Previous Exercise"].exists)
         XCTAssertTrue(app.buttons["Next Exercise"].exists)
         XCTAssertTrue(app.staticTexts["active-exercise-name"].exists)
+
+        let weightButton = app.buttons["set-1-weight-picker"]
+        weightButton.tap()
+        let weightWheel = app.pickerWheels.firstMatch
+        XCTAssertTrue(weightWheel.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.keyboards.count, 0)
+        if hadExistingSession {
+            app.buttons["cancel-workout-value"].tap()
+            app.buttons["set-1-repetitions-picker"].tap()
+            XCTAssertTrue(app.pickerWheels.firstMatch.waitForExistence(timeout: 5))
+            XCTAssertEqual(app.keyboards.count, 0)
+            app.buttons["cancel-workout-value"].tap()
+        } else {
+            weightWheel.adjust(toPickerWheelValue: "72.5")
+            app.buttons["confirm-workout-value"].tap()
+            XCTAssertEqual(weightButton.value as? String, "72.5 kilograms")
+
+            let repetitionsButton = app.buttons["set-1-repetitions-picker"]
+            repetitionsButton.tap()
+            let repetitionsWheel = app.pickerWheels.firstMatch
+            XCTAssertTrue(repetitionsWheel.waitForExistence(timeout: 5))
+            repetitionsWheel.adjust(toPickerWheelValue: "10")
+            app.buttons["confirm-workout-value"].tap()
+            XCTAssertEqual(repetitionsButton.value as? String, "10 repetitions")
+
+            repetitionsButton.tap()
+            XCTAssertTrue(repetitionsWheel.waitForExistence(timeout: 5))
+            repetitionsWheel.adjust(toPickerWheelValue: "11")
+            app.buttons["cancel-workout-value"].tap()
+            XCTAssertEqual(repetitionsButton.value as? String, "10 repetitions")
+        }
 
         if !hadExistingSession {
             let setCards = app.otherElements.matching(
@@ -155,8 +220,8 @@ final class GymFlowUITests: XCTestCase {
             let fourthCard = app.otherElements["workout-set-card-4"]
             scrollToElement(fourthCard, in: app)
             XCTAssertTrue(app.staticTexts["Set 4"].exists)
-            XCTAssertTrue(app.textFields["Set 4 weight"].exists)
-            XCTAssertTrue(app.textFields["Set 4 repetitions"].exists)
+            XCTAssertTrue(app.buttons["set-4-weight-picker"].exists)
+            XCTAssertTrue(app.buttons["set-4-repetitions-picker"].exists)
             keepScreenshot(named: "Physical Active Workout four sets")
             scrollToElement(firstCard, in: app)
         }

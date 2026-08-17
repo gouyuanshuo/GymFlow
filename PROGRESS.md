@@ -4,17 +4,177 @@
 
 - Completed: reusable Exercise Library with metadata/default editing, search/filter/sort, safe archive/restore/delete behavior, plan integration, exact legacy linking, and immutable historical snapshots.
 - Completed: monthly History calendar with local start-day grouping, multiple workouts per day, accessible indicators, month navigation, day details, and monthly totals.
-- Completed: local workout-result sharing from completion and History with a dedicated 1080 × 1350 card, 10 offline backgrounds, stable randomization, and the native iOS share sheet.
-- Verified: 64/64 selected simulator checks, 63/63 physical-iPhone domain tests, clean simulator/physical builds, signed install, and launch over the existing device store.
+- Completed: native active-workout Weight/Reps wheel pickers with transactional Cancel/Done and no standard-workout keyboard.
+- Completed: history-derived Personal Best metrics, chronological PR events, completion celebration, and real PR sharing using stable exercise identity.
+- Completed: iPhone-ratio workout sharing from completion and History with a dedicated 1179 × 2556 poster, 10 offline backgrounds, stable randomization, and the native iOS share sheet.
+- Verified: exact-final 99/99 tests on the physical iPhone, 96/96 on Simulator before three final performance-edge cases and the presentation-only adjustment, clean Simulator/physical builds, retained poster inspection, signed install, and launch over the existing device store.
 - Completed: interactive Lock Screen/Dynamic Island workout actions and coordinated stronger rest-completion feedback.
 - Completed: first-release Milestones 0–8 and continuous-experience Upgrade Milestones 1–9.
 - Completed: root-layout bug fix and defensive Live Activity lifecycle implementation with unit/UI verification.
 - Completed: deterministic first-tap plan routing, stable Now Playing presentation ownership, and history-based duration estimation with simulator and physical-iPhone verification.
 - Completed: Active Workout exercise-screen redesign with responsive set cards, compact reference/timer UI, safe-area player/navigation controls, and simulator plus physical-iPhone verification.
-- Current work: sharing implementation, simulator verification, and signed iOS build are complete; the paired iPhone is currently offline and could not accept the sharing build.
-- Next action: reconnect/unlock the paired iPhone and perform the remaining physical sharing plus existing Exercise Library/Calendar and Dynamic Island/alert-intensity gestures.
+- Current work: picker, Personal Best, PR, and share-poster implementation plus automated/device verification are complete.
+- Next action: perform the remaining hands-on physical picker/share/Exercise Detail gestures when Xcode UI automation or a human device pass is available, plus the existing Dynamic Island/alert-intensity checks.
 
 ## Engineering log
+
+### 2026-08-17 — Workout pickers, Personal Bests, and iPhone share poster audit/baseline
+
+- Read all project guidance and inspected the active-workout set card/save flow, SwiftData session/exercise/set snapshots, stable exercise identity and exact-name legacy fallback, Exercise Detail, workout completion, share-summary/card/preview/renderer, existing tests, project synchronization, and installed destinations.
+- The persisted model already supports migration-safe Personal Best derivation: completed `ExerciseRecord` snapshots carry an optional stable `exerciseID`, retain their historical name, and own completed set values. Personal Bests can remain non-persisted and derived without resetting or rewriting the SwiftData store.
+- Settings exposes kilograms as the fixed weight unit and has no configurable increment. The active workout currently mutates Weight/Reps directly through keyboard text fields and invokes the existing immediate-save callback on each edit.
+- Sharing currently renders a fixed 360 × 450 point (4:5) card at 3× for 1080 × 1350 pixels. Background selection is already isolated from workout data and will be preserved while the design canvas changes.
+- The unrelated untracked August 6 screenshot remains untouched.
+
+Baseline command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowPickerPBShareBaselineDerivedData CODE_SIGNING_ALLOWED=NO build -quiet
+```
+
+Baseline result: exit 0, **BUILD SUCCEEDED**, including the embedded Live Activity extension.
+
+#### Performance Milestone 1 — Native workout value pickers
+
+- Replaced the active-workout Weight and Reps `TextField` controls with large tappable value buttons. Each presents a compact 340-point sheet containing a native SwiftUI wheel `Picker`, Cancel, and Done; the normal workout path no longer invokes a keyboard.
+- Added a transaction model that starts from the persisted set value, retains changes only inside the sheet, and applies to the `WorkoutSetRecord` only after Done. The existing `ActiveWorkoutView` immediate-save callback remains the sole persistence path after commit.
+- Weight offers 0–500 kg in 0.5 kg increments through one wheel and includes a safe exact option for a pre-existing off-grid value so opening the picker never silently rounds old data. Repetitions offers integers from 0 through 100 and similarly preserves an existing out-of-range legacy value until the user chooses another value.
+- VoiceOver announces the set number, current kilograms/repetitions, and wheel purpose. Buttons and completion controls retain at least 44-point targets; no schema, plan, history, timer, audio, or Live Activity behavior changed.
+- Added five focused picker tests covering decimal options, integer options, Cancel, Done, and existing-value selection. Updated active-workout UI coverage to assert the new buttons and exercise Cancel/Done/reopen gestures.
+
+Picker build command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowWheelPickerM1DerivedData CODE_SIGNING_ALLOWED=NO build -quiet
+```
+
+Result: exit 0, **BUILD SUCCEEDED**.
+
+Focused picker-test command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=8869D2AC-6D86-4A70-BB63-556862EDD7BC' -derivedDataPath /tmp/GymFlowWheelPickerTestsDerivedData CODE_SIGNING_ALLOWED=NO -only-testing:GymFlowTests/WorkoutValuePickerTests -parallel-testing-enabled NO test -quiet
+```
+
+Result: exit 0, **5/5 picker tests passed**.
+
+The focused picker UI command compiled the updated app/test bundle but stalled before its first assertion under the repository's previously documented Xcode `DebuggerVersionStore: no debugger version` / `waiting for workers to materialize` defect. It was interrupted after 60 seconds with exit 75 rather than left hanging; a different installed simulator subsequently executed the performance domain suite normally. The UI gesture assertions remain scheduled for final retry and physical verification.
+
+#### Performance Milestone 2 — Exercise performance service
+
+- Added a non-persisted `ExercisePerformanceService` plus `ExerciseBestSummary`, `ExercisePerformanceRecord`, and `ExercisePREvent`. Completed workout history remains the source of truth; no best value or PR flag is written into SwiftData.
+- Matching uses stable `ExerciseDefinition.id`/`ExerciseRecord.exerciseID` whenever the historical record has an ID. Only nil-ID legacy records may fall back to exact whitespace/case/diacritic-normalized snapshot-name equality; a different non-nil ID is never accepted solely because the name matches.
+- Valid records require a completed session with a finite completion date no earlier than its start and a completed, non-warm-up set with finite nonnegative weight and positive repetitions. Cancelled/active/planned sessions, incomplete sets, warm-ups, and invalid values are excluded.
+- Heaviest Weight is the highest positive weight; Estimated 1RM uses Epley (`weight × (1 + reps / 30)`) only for positive weights and 1–15 repetitions; Best Set Volume is positive `weight × repetitions`. Rep-at-weight bests are maintained by exact weight (normalized to 0.01 kg), and the displayed repetition best uses loads at least 50% of the exercise's historical maximum. Pure bodyweight work excludes weight/e1RM/volume records and uses repetitions.
+- PR events are session-aware and compare the target workout only with chronologically previous valid sessions, avoiding self-comparison and excluding later records. Weight, Estimated 1RM, Set Volume, and repeat-at-an-existing-weight PRs are implemented; bodyweight establishes and advances a repetition PR.
+- Added 14 focused tests covering all requested calculations/exclusions, stable identity and rename behavior, three primary PR types, old-record isolation, strict legacy fallback, and bodyweight handling.
+
+Focused performance-test command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=30393FFE-FE4E-4706-9E61-78D23C7D1044' -derivedDataPath /tmp/GymFlowPerformanceServiceTests17eDerivedData CODE_SIGNING_ALLOWED=NO -only-testing:GymFlowTests/ExercisePerformanceServiceTests -parallel-testing-enabled NO test -quiet
+```
+
+Result: exit 0, **14/14 performance tests passed** on iPhone 17e / iOS 26.5. The initial run on the already-booted iPhone 17 inherited the stalled test coordinator and was interrupted before execution; rerouting to the installed iPhone 17e completed normally.
+
+Exact service-milestone build command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowPerformanceServiceM2FinalDerivedData CODE_SIGNING_ALLOWED=NO build -quiet
+```
+
+Result: exit 0, **BUILD SUCCEEDED** without performance-service warnings.
+
+#### Performance Milestone 3 — Personal Best UI and completion integration
+
+- Exercise Detail now includes concise Personal Best rows for Heaviest Weight, Estimated 1RM, Best Set Volume, and Best Repetitions at a relevant load, followed by a newest-first Best History section capped at eight meaningful PR events. Existing library metadata, actions, notes, and Recent Workouts remain separate sections.
+- Pure bodyweight histories show Best Repetitions and suppress misleading zero-kilogram weight, e1RM, and volume tiles. The Estimated 1RM footer explicitly identifies Epley and the 1–15 rep validity range.
+- Workout completion derives PR events for the just-finished session against chronologically prior valid history and shows up to four results in a subtle trophy card. The session is never compared with itself and no per-set full-screen celebration was added.
+- The first UI-milestone build found one invalid `Section("Best History")` plus-footer initializer. Rewriting it with explicit content/header/footer closures fixed the compile error without changing behavior; the immediate rebuild succeeded.
+
+Build command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowPersonalBestUIM3DerivedData CODE_SIGNING_ALLOWED=NO build -quiet
+```
+
+Final result: exit 0, **BUILD SUCCEEDED**.
+
+#### Performance Milestone 4 — iPhone-ratio share poster and PR integration
+
+- Replaced the 4:5 card with a stable 393 × 852 point iPhone-like portrait canvas. `ImageRenderer` remains device-independent and opaque at 3×, producing exactly 1179 × 2556 pixels without screenshotting the current phone.
+- Redesigned the full-height poster with a larger three-line-safe workout title, date, strength visual, four workout metrics, three training highlights, optional real Personal Best panel, and branded footer. The app preview is constrained to a fitted 300-point-wide phone-like poster and never crops or stretches the design.
+- Completion and History sharing now pass all sessions into the summary builder. It shows one prominent event using Weight, Estimated 1RM, Set Volume, then Rep-at-Weight priority; if the target workout did not beat its prior valid history, the PR panel is omitted.
+- Preserved all ten programmatic backgrounds, one-time random initial selection, non-repeating Randomize, manual selection, immutable workout data, and the native `UIActivityViewController` destination sheet.
+- Updated render tests for the exact pixel size, long titles/large metrics, all backgrounds, a long PR highlight, valid image creation, stable background behavior, and false-PR omission.
+
+Share-poster build command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowSharePosterM4DerivedData CODE_SIGNING_ALLOWED=NO build -quiet
+```
+
+Result: exit 0, **BUILD SUCCEEDED**.
+
+Focused share command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=30393FFE-FE4E-4706-9E61-78D23C7D1044' -derivedDataPath /tmp/GymFlowSharePosterTestsDerivedData CODE_SIGNING_ALLOWED=NO -only-testing:GymFlowTests/WorkoutSharingTests -parallel-testing-enabled NO test -quiet
+```
+
+Result: exit 0, **13/13 sharing domain/render tests passed**. A separate retained-image XCTest also passed. The original-resolution Ultraviolet poster was exported from its `.xcresult` and visually inspected both with and without the PR panel; the title, hero, metrics, highlights, PR card, and footer are present and unclipped.
+
+Combined exact-tree domain/render command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=30393FFE-FE4E-4706-9E61-78D23C7D1044' -derivedDataPath /tmp/GymFlowPBShareFinalUnitTestsDerivedData CODE_SIGNING_ALLOWED=NO -only-testing:GymFlowTests -parallel-testing-enabled NO test -quiet
+```
+
+Result: exit 0, **96/96 tests passed**, zero failures or skips on iPhone 17e / iOS 26.5.
+
+The focused active-workout UI test was retried on iPhone 17e and, after a full Simulator shutdown and boot, on a fresh iPhone 17 Pro runtime. Both compiled but stopped before the first assertion with Xcode's local `DebuggerVersionStore: no debugger version` and `waiting for workers to materialize` defect, then were interrupted rather than left hanging. This does not replace interaction verification; the same gestures remain part of the connected physical-iPhone attempt.
+
+#### Performance Milestone 5 — Final and physical verification
+
+- Ran an exact-final generic Simulator clean build and generic Simulator build-for-testing. The app, embedded Live Activity extension, 99-test domain/render bundle, and updated UI-test bundle all compile.
+- Built the signed app for connected iPhone `nv` (iPhone 14 Pro Max, iOS 26.6), installed over the existing application without resetting its SwiftData store, and launched bundle `com.gouyuanshuo.GymFlow`. The exact-final app was installed and launched again after testing.
+- Ran the complete 99-test domain/render suite on the physical iPhone after the final source changes. Picker transactions/ranges, Personal Best filtering/calculation/identity/PR logic, and all 1179 × 2556 rendering/background/long-content/PR cases passed on arm64 hardware. The final additions explicitly cover Rep-at-Weight PRs, the 50%-of-max relevant-load repetition rule, and corrupt session timestamps.
+- The focused physical workout UI path was extended to open both native wheels without a keyboard, and—only for a disposable new session—exercise 72.5 kg Done/reopen, 10-rep Done, and Cancel. Xcode compiled it but its device UI runner hit the same local `DebuggerVersionStore: no debugger version` / worker-materialization fault before assertion 1 and was interrupted with exit 75. Therefore physical wheel gestures, Exercise Detail inspection, completion PR presentation, background Randomize, and native share destination/save are **not claimed as observed** in this pass.
+- Audited the final tree for TODO/FIXME, `fatalError`, force-try/casts, active-workout Weight/Reps `TextField`/keyboard use, whitespace errors, data-model changes, and unrelated workspace edits. No production placeholder or unsafe construct was introduced; `WorkoutModels.swift` and the SwiftData schema are unchanged, `git diff --check` passes, and the unrelated untracked August 6 screenshot remains untouched.
+
+Exact-final physical test command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS,id=00008120-001479921160201E' -derivedDataPath /tmp/GymFlowPBSharePhysical99TestsDerivedData -allowProvisioningUpdates -only-testing:GymFlowTests -parallel-testing-enabled NO test -quiet
+```
+
+Result: exit 0, **99/99 passed**, zero failures or skips on iPhone 14 Pro Max / iOS 26.6.
+
+Final clean Simulator build:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowPBShareFinalCleanBuildDerivedData CODE_SIGNING_ALLOWED=NO clean build -quiet
+```
+
+Result: exit 0, **CLEAN BUILD SUCCEEDED**.
+
+Final test-bundle compile:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowPBShareFinal99BuildForTestingDerivedData CODE_SIGNING_ALLOWED=NO build-for-testing -quiet
+```
+
+Result: exit 0, **BUILD FOR TESTING SUCCEEDED**.
+
+Signed physical build/install/launch:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -configuration Debug -destination 'platform=iOS,id=00008120-001479921160201E' -derivedDataPath /tmp/GymFlowPBSharePhysicalFinalCleanDerivedData -allowProvisioningUpdates clean build -quiet
+xcrun devicectl device install app --device 00008120-001479921160201E --timeout 60 /tmp/GymFlowPBSharePhysicalFinalCleanDerivedData/Build/Products/Debug-iphoneos/GymFlow.app
+xcrun devicectl device process launch --device 00008120-001479921160201E --timeout 30 --terminate-existing com.gouyuanshuo.GymFlow
+```
+
+Result: exit 0 throughout, **SIGNED CLEAN BUILD, INSTALL, AND LAUNCH SUCCEEDED**. Installation preserved the existing app container; no database deletion, reset, or schema migration was performed.
 
 ### 2026-08-14 — Workout sharing rendering and integration
 

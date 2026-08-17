@@ -45,6 +45,8 @@ struct WorkoutSharingTests {
         #expect(summary.trainingVolume == session.trainingVolume)
         #expect(summary.trainingVolume == 1_490)
         #expect(summary.exerciseHighlights.count == 2)
+        #expect(summary.personalBestHighlight?.exerciseName == "Bench Press")
+        #expect(summary.personalBestHighlight?.typeTitle == "Weight PR")
         #expect(!summary.accessibilityDescription.contains("Private note"))
     }
 
@@ -207,7 +209,7 @@ struct WorkoutSharingTests {
         #expect(summary.exerciseHighlights.first?.weight == 60)
     }
 
-    @Test("Share renderer exports a sharp 4 by 5 image")
+    @Test("Share renderer exports a sharp iPhone-ratio image")
     func renderedImageDimensions() throws {
         let summary = try WorkoutShareSummaryBuilder.build(from: completedSession(exercises: [
             makeExercise(
@@ -219,8 +221,8 @@ struct WorkoutSharingTests {
 
         let image = try WorkoutShareRenderer.render(summary: summary, background: .blackGold)
 
-        #expect(image.cgImage?.width == 1_080)
-        #expect(image.cgImage?.height == 1_350)
+        #expect(image.cgImage?.width == 1_179)
+        #expect(image.cgImage?.height == 2_556)
     }
 
     @Test("Share renderer handles long and large workout results")
@@ -237,14 +239,52 @@ struct WorkoutSharingTests {
                 .init(name: String(repeating: "Single Arm Cable Row ", count: 4), weight: 125.5, repetitions: 12, exerciseVolume: 12_000, sortOrder: 0),
                 .init(name: "Romanian Deadlift", weight: 205, repetitions: 8, exerciseVolume: 9_840, sortOrder: 1),
                 .init(name: "Bulgarian Split Squat", weight: 42.5, repetitions: 20, exerciseVolume: 6_800, sortOrder: 2)
-            ]
+            ],
+            personalBestHighlight: .init(
+                exerciseName: String(repeating: "Barbell Bench Press ", count: 4),
+                typeTitle: "Estimated 1RM PR",
+                setDescription: "205.5 kg × 12",
+                metricDescription: "287.7 kg estimated"
+            )
         )
 
         for background in WorkoutShareBackground.allCases {
             let image = try WorkoutShareRenderer.render(summary: summary, background: background)
-            #expect(image.cgImage?.width == 1_080)
-            #expect(image.cgImage?.height == 1_350)
+            #expect(image.cgImage?.width == 1_179)
+            #expect(image.cgImage?.height == 2_556)
         }
+    }
+
+    @Test("Share summary omits a Personal Best when the workout sets no record")
+    func shareSummaryOmitsFalsePersonalBest() throws {
+        let previous = completedSession(exercises: [
+            makeExercise(
+                name: "Bench Press",
+                order: 0,
+                sets: [completedSet(number: 1, weight: 100, repetitions: 5)]
+            )
+        ])
+        let currentStart = previous.startedAt.addingTimeInterval(86_400)
+        let current = WorkoutSession(
+            planNameSnapshot: "Test Workout",
+            startedAt: currentStart,
+            completedAt: currentStart.addingTimeInterval(3_600),
+            status: .completed,
+            exerciseRecords: [
+                makeExercise(
+                    name: "Bench Press",
+                    order: 0,
+                    sets: [completedSet(number: 1, weight: 80, repetitions: 5)]
+                )
+            ]
+        )
+
+        let summary = try WorkoutShareSummaryBuilder.build(
+            from: current,
+            sessions: [previous, current]
+        )
+
+        #expect(summary.personalBestHighlight == nil)
     }
 
     private func completedSession(
@@ -292,7 +332,7 @@ struct WorkoutSharingTests {
 
 @MainActor
 final class WorkoutShareRenderingAttachmentTests: XCTestCase {
-    func testExportedCardIsFourByFive() throws {
+    func testExportedCardUsesIPhonePortraitRatio() throws {
         let summary = WorkoutShareSummary(
             workoutName: "Chest + Arms Performance Session",
             date: Date(timeIntervalSince1970: 1_786_651_200),
@@ -305,16 +345,22 @@ final class WorkoutShareRenderingAttachmentTests: XCTestCase {
                 .init(name: "Barbell Bench Press", weight: 70, repetitions: 8, exerciseVolume: 2_100, sortOrder: 0),
                 .init(name: "Incline Dumbbell Press", weight: 24, repetitions: 10, exerciseVolume: 960, sortOrder: 1),
                 .init(name: "Cable Fly", weight: 20, repetitions: 12, exerciseVolume: 720, sortOrder: 2)
-            ]
+            ],
+            personalBestHighlight: .init(
+                exerciseName: "Barbell Bench Press",
+                typeTitle: "Weight PR",
+                setDescription: "80 kg × 5",
+                metricDescription: nil
+            )
         )
 
         let image = try WorkoutShareRenderer.render(summary: summary, background: .ultraviolet)
         let attachment = XCTAttachment(image: image)
-        attachment.name = "Rendered Workout Share Card 1080x1350"
+        attachment.name = "Rendered Workout Share Poster 1179x2556"
         attachment.lifetime = .keepAlways
         add(attachment)
 
-        XCTAssertEqual(image.cgImage?.width, 1_080)
-        XCTAssertEqual(image.cgImage?.height, 1_350)
+        XCTAssertEqual(image.cgImage?.width, 1_179)
+        XCTAssertEqual(image.cgImage?.height, 2_556)
     }
 }

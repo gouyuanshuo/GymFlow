@@ -32,7 +32,8 @@ struct WorkoutSharePreviewView: View {
                     summary: summary,
                     background: backgroundSelection.selected
                 )
-                .frame(maxWidth: 360)
+                .frame(maxWidth: 300)
+                .aspectRatio(WorkoutShareRenderer.aspectRatio, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
                 .frame(maxWidth: .infinity)

@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 struct WorkoutSetCard: View {
     let set: WorkoutSetRecord
@@ -7,6 +6,7 @@ struct WorkoutSetCard: View {
     let onChange: () -> Void
     let onToggleCompletion: () -> Void
     let onRemove: () -> Void
+    @State private var activePicker: WorkoutValuePickerKind?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -40,33 +40,27 @@ struct WorkoutSetCard: View {
             }
 
             HStack(alignment: .top, spacing: 12) {
-                WorkoutNumberInput(
+                WorkoutValueButton(
                     title: "Weight",
                     unit: "kg",
-                    value: Binding(
-                        get: { set.weight },
-                        set: {
-                            set.weight = max(0, $0)
-                            onChange()
-                        }
-                    ),
-                    keyboardType: .decimalPad,
-                    accessibilityLabel: "Set \(set.setNumber) weight"
-                )
+                    value: GymFlowFormatters.weight(set.weight),
+                    accessibilityLabel: "Set \(set.setNumber) weight",
+                    accessibilityValue: "\(GymFlowFormatters.weight(set.weight)) kilograms",
+                    accessibilityIdentifier: "set-\(set.setNumber)-weight-picker"
+                ) {
+                    activePicker = .weight
+                }
 
-                WorkoutNumberInput(
+                WorkoutValueButton(
                     title: "Reps",
-                    value: Binding(
-                        get: { Double(set.repetitions) },
-                        set: {
-                            set.repetitions = max(0, Int($0))
-                            onChange()
-                        }
-                    ),
-                    keyboardType: .numberPad,
+                    unit: "reps",
+                    value: "\(set.repetitions)",
                     accessibilityLabel: "Set \(set.setNumber) repetitions",
-                    format: .number.precision(.fractionLength(0))
-                )
+                    accessibilityValue: "\(set.repetitions) repetitions",
+                    accessibilityIdentifier: "set-\(set.setNumber)-repetitions-picker"
+                ) {
+                    activePicker = .repetitions
+                }
             }
 
             WarmupChip(
@@ -90,6 +84,15 @@ struct WorkoutSetCard: View {
         .animation(.snappy, value: set.isCompleted)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("workout-set-card-\(set.setNumber)")
+        .sheet(item: $activePicker) { kind in
+            WorkoutValuePickerSheet(
+                setNumber: set.setNumber,
+                transaction: transaction(for: kind)
+            ) { transaction in
+                transaction.commit(to: set)
+                onChange()
+            }
+        }
     }
 
     private var cardBackground: Color {
@@ -98,30 +101,42 @@ struct WorkoutSetCard: View {
         }
         return Color(uiColor: .secondarySystemBackground)
     }
+
+    private func transaction(for kind: WorkoutValuePickerKind) -> WorkoutValuePickerTransaction {
+        switch kind {
+        case .weight:
+            WorkoutValuePickerTransaction(weight: set.weight)
+        case .repetitions:
+            WorkoutValuePickerTransaction(repetitions: set.repetitions)
+        }
+    }
 }
 
-private struct WorkoutNumberInput: View {
+private struct WorkoutValueButton: View {
     let title: String
     let unit: String?
-    @Binding var value: Double
-    let keyboardType: UIKeyboardType
+    let value: String
     let accessibilityLabel: String
-    let format: FloatingPointFormatStyle<Double>
+    let accessibilityValue: String
+    let accessibilityIdentifier: String
+    let action: () -> Void
 
     init(
         title: String,
         unit: String? = nil,
-        value: Binding<Double>,
-        keyboardType: UIKeyboardType,
+        value: String,
         accessibilityLabel: String,
-        format: FloatingPointFormatStyle<Double> = .number.precision(.fractionLength(0 ... 2))
+        accessibilityValue: String,
+        accessibilityIdentifier: String,
+        action: @escaping () -> Void
     ) {
         self.title = title
         self.unit = unit
-        _value = value
-        self.keyboardType = keyboardType
+        self.value = value
         self.accessibilityLabel = accessibilityLabel
-        self.format = format
+        self.accessibilityValue = accessibilityValue
+        self.accessibilityIdentifier = accessibilityIdentifier
+        self.action = action
     }
 
     var body: some View {
@@ -130,26 +145,37 @@ private struct WorkoutNumberInput: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            HStack(spacing: 6) {
-                TextField(title, value: $value, format: format)
-                    .keyboardType(keyboardType)
+            Button(action: action) {
+                HStack(spacing: 6) {
+                    Text(value)
                     .font(.title3.monospacedDigit().weight(.semibold))
-                    .multilineTextAlignment(.leading)
+                    .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity, minHeight: 48)
-                    .accessibilityLabel(accessibilityLabel)
+                    .multilineTextAlignment(.leading)
 
-                if let unit {
-                    Text(unit)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.secondary)
+                    if let unit {
+                        Text(unit)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                    }
+
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.tertiary)
                         .accessibilityHidden(true)
                 }
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(Color(uiColor: .tertiarySystemFill))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity, minHeight: 48)
-            .background(Color(uiColor: .tertiarySystemFill))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityValue(accessibilityValue)
+            .accessibilityHint("Opens a wheel picker")
+            .accessibilityIdentifier(accessibilityIdentifier)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

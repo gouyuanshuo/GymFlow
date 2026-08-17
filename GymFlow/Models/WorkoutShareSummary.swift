@@ -9,6 +9,29 @@ struct WorkoutShareSummary: Equatable {
     let repetitionCount: Int
     let trainingVolume: Double
     let exerciseHighlights: [WorkoutShareExerciseHighlight]
+    let personalBestHighlight: WorkoutSharePersonalBestHighlight?
+
+    init(
+        workoutName: String,
+        date: Date,
+        duration: TimeInterval,
+        exerciseCount: Int,
+        setCount: Int,
+        repetitionCount: Int,
+        trainingVolume: Double,
+        exerciseHighlights: [WorkoutShareExerciseHighlight],
+        personalBestHighlight: WorkoutSharePersonalBestHighlight? = nil
+    ) {
+        self.workoutName = workoutName
+        self.date = date
+        self.duration = duration
+        self.exerciseCount = exerciseCount
+        self.setCount = setCount
+        self.repetitionCount = repetitionCount
+        self.trainingVolume = trainingVolume
+        self.exerciseHighlights = exerciseHighlights
+        self.personalBestHighlight = personalBestHighlight
+    }
 
     var displayWorkoutName: String {
         WorkoutShareSummaryBuilder.displayName(for: workoutName)
@@ -17,10 +40,21 @@ struct WorkoutShareSummary: Equatable {
     var accessibilityDescription: String {
         let exerciseWord = exerciseCount == 1 ? "exercise" : "exercises"
         let setWord = setCount == 1 ? "set" : "sets"
+        let personalBestDescription = personalBestHighlight.map {
+            ", new \($0.typeTitle.lowercased()) for \($0.exerciseName), \($0.setDescription)"
+        } ?? ""
         return "\(workoutName), \(WorkoutShareFormatters.duration(duration)), "
             + "\(exerciseCount) \(exerciseWord), \(setCount) \(setWord), "
-            + "\(WorkoutShareFormatters.exactVolume(trainingVolume))."
+            + "\(WorkoutShareFormatters.exactVolume(trainingVolume))"
+            + personalBestDescription + "."
     }
+}
+
+struct WorkoutSharePersonalBestHighlight: Equatable {
+    let exerciseName: String
+    let typeTitle: String
+    let setDescription: String
+    let metricDescription: String?
 }
 
 struct WorkoutShareExerciseHighlight: Equatable, Identifiable {
@@ -60,7 +94,10 @@ enum WorkoutShareSummaryBuilder {
     static let maximumDisplayNameLength = 64
     static let maximumHighlights = 3
 
-    static func build(from session: WorkoutSession) throws -> WorkoutShareSummary {
+    static func build(
+        from session: WorkoutSession,
+        sessions: [WorkoutSession] = []
+    ) throws -> WorkoutShareSummary {
         guard session.status == .completed else {
             throw WorkoutShareError.workoutNotCompleted
         }
@@ -79,7 +116,11 @@ enum WorkoutShareSummaryBuilder {
             setCount: session.completedSetCount,
             repetitionCount: session.totalRepetitions,
             trainingVolume: session.trainingVolume,
-            exerciseHighlights: highlights(from: session.orderedExerciseRecords)
+            exerciseHighlights: highlights(from: session.orderedExerciseRecords),
+            personalBestHighlight: personalBestHighlight(
+                for: session,
+                sessions: sessions.isEmpty ? [session] : sessions
+            )
         )
     }
 
@@ -134,6 +175,41 @@ enum WorkoutShareSummaryBuilder {
         }
         .prefix(maximumHighlights)
         .map { $0 }
+    }
+
+    private static func personalBestHighlight(
+        for session: WorkoutSession,
+        sessions: [WorkoutSession]
+    ) -> WorkoutSharePersonalBestHighlight? {
+        let event = ExercisePerformanceService.personalBestEvents(
+            in: session,
+            sessions: sessions
+        )
+        .sorted { lhs, rhs in
+            if lhs.primaryType.priority != rhs.primaryType.priority {
+                return lhs.primaryType.priority < rhs.primaryType.priority
+            }
+            switch lhs.primaryType {
+            case .weight:
+                return lhs.record.weight > rhs.record.weight
+            case .estimatedOneRepMax:
+                return (lhs.record.estimatedOneRepMax ?? 0)
+                    > (rhs.record.estimatedOneRepMax ?? 0)
+            case .setVolume:
+                return lhs.record.setVolume > rhs.record.setVolume
+            case .repetitionsAtWeight:
+                return lhs.record.repetitions > rhs.record.repetitions
+            }
+        }
+        .first
+
+        guard let event else { return nil }
+        return WorkoutSharePersonalBestHighlight(
+            exerciseName: event.record.exerciseName,
+            typeTitle: event.primaryType.title,
+            setDescription: event.record.setDescription,
+            metricDescription: event.metricDescription
+        )
     }
 }
 
