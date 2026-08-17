@@ -418,3 +418,56 @@ Acceptance: both new and old completed sessions produce a sharp local image and 
 - [x] Update project documentation with exact results and honest human-only limitations.
 
 Acceptance: GymFlow stays buildable, existing regressions pass, and physical sharing results are observed or precisely bounded.
+
+## Workout Pickers, Personal Bests, and iPhone Share Poster
+
+### Performance Milestone 0 — Audit and baseline
+
+- [x] Read project guidance and inspect active-workout editing, exercise identity/history, completion, and sharing architecture.
+- [x] Confirm kilograms are the only existing unit setting and completed history already stores stable exercise identifiers with legacy snapshots.
+- [x] Run the unchanged main-scheme simulator build.
+
+Acceptance: migration-safe boundaries and the clean baseline are known before implementation.
+
+### Performance Milestone 1 — Native workout value pickers
+
+- [x] Replace standard active-workout Weight/Reps text fields with tappable controls and native wheel pickers.
+- [x] Keep selection transactional so Cancel discards and Done persists through the existing immediate-save workflow.
+- [x] Support 0–500 kg in 0.5 kg increments and 0–100 integer repetitions with accessible compact sheets.
+- [x] Add picker unit/UI coverage and build the main scheme.
+
+Acceptance: normal set editing requires no keyboard, decimals work, and existing set persistence remains intact.
+
+### Performance Milestone 2 — Exercise performance service
+
+- [x] Add derived Personal Best summaries, rep-at-weight records, and chronological PR events from completed working sets.
+- [x] Use stable exercise IDs first and exact normalized legacy names only when historical IDs are absent.
+- [x] Exclude warm-ups, incomplete sets, cancelled sessions, invalid timestamps, and invalid weight/repetition values.
+- [x] Add focused calculation and PR-detection tests; build the main scheme.
+
+Acceptance: workout history remains the source of truth and record calculations are deterministic and rename-safe.
+
+### Performance Milestone 3 — Personal Best surfaces
+
+- [x] Add Personal Bests and Best History to Exercise Detail without making the existing Recent Workouts section overly dense.
+- [x] Show real new PRs on workout completion and expose one reliable highlight to sharing.
+- [x] Build and test the main scheme.
+
+Acceptance: records update after workout completion while older history and exercise snapshots remain unchanged.
+
+### Performance Milestone 4 — iPhone-ratio workout sharing
+
+- [x] Redesign the share card and preview around a stable 9:19.5 portrait canvas.
+- [x] Export at 1179 × 2556 pixels, preserve all background selection behavior, and keep text/PR highlights unclipped.
+- [x] Update rendering, randomization, long-content, and valid-image tests; build the main scheme.
+
+Acceptance: the preview fits like a phone poster and the exported design is device-independent and high resolution.
+
+### Performance Milestone 5 — Final and physical verification
+
+- [x] Run focused/full tests and a final clean Simulator build.
+- [x] Build, install, and launch on the paired physical iPhone when available without replacing its database.
+- [x] Exercise the picker, Personal Best, and native share flows on-device where automation and device state permit.
+- [x] Update product documentation with exact commands, outcomes, and honest remaining limitations.
+
+Acceptance: the main scheme is buildable, relevant tests pass, and physical results are observed or precisely bounded.

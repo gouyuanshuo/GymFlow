@@ -3,8 +3,9 @@ import UIKit
 
 @MainActor
 enum WorkoutShareRenderer {
-    static let pointSize = CGSize(width: 360, height: 450)
+    static let pointSize = CGSize(width: 393, height: 852)
     static let exportScale: CGFloat = 3
+    static let aspectRatio = pointSize.width / pointSize.height
     static let pixelSize = CGSize(
         width: pointSize.width * exportScale,
         height: pointSize.height * exportScale

@@ -3,12 +3,18 @@ import SwiftUI
 
 struct WorkoutCompletionView: View {
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var allSessions: [WorkoutSession]
     let session: WorkoutSession
     let onDone: () -> Void
     @State private var errorMessage: String?
     @State private var sharePresentation: WorkoutSharePresentation?
 
+    private var personalBestEvents: [ExercisePREvent] {
+        ExercisePerformanceService.personalBestEvents(in: session, sessions: allSessions)
+    }
+
     var body: some View {
+        let newPersonalBestEvents = personalBestEvents
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
@@ -34,6 +40,12 @@ struct WorkoutCompletionView: View {
                     )
                     if let playlistName = session.playlistNameSnapshot {
                         SummaryMetric(title: "Workout Playlist", value: playlistName, icon: "music.note.list")
+                    }
+
+                    if !newPersonalBestEvents.isEmpty {
+                        WorkoutPersonalBestCelebration(
+                            events: Array(newPersonalBestEvents.prefix(4))
+                        )
                     }
 
                     Button {
@@ -76,7 +88,10 @@ struct WorkoutCompletionView: View {
     private func prepareShare() {
         do {
             sharePresentation = WorkoutSharePresentation(
-                summary: try WorkoutShareSummaryBuilder.build(from: session)
+                summary: try WorkoutShareSummaryBuilder.build(
+                    from: session,
+                    sessions: allSessions
+                )
             )
         } catch {
             errorMessage = error.localizedDescription
@@ -90,6 +105,50 @@ struct WorkoutCompletionView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+}
+
+private struct WorkoutPersonalBestCelebration: View {
+    let events: [ExercisePREvent]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Label("New Personal Best", systemImage: "sparkles")
+                .font(.headline.weight(.bold))
+                .foregroundStyle(.orange)
+
+            ForEach(events) { event in
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(event.record.exerciseName)
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        Text(event.primaryType.title)
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.orange)
+                    }
+                    Text(event.record.setDescription)
+                        .font(.title3.monospacedDigit().weight(.bold))
+                    if let metricDescription = event.metricDescription {
+                        Text(metricDescription)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .gymCard()
+        .overlay(alignment: .topTrailing) {
+            Image(systemName: "trophy.fill")
+                .font(.title2)
+                .foregroundStyle(.orange.opacity(0.7))
+                .padding(16)
+                .accessibilityHidden(true)
+        }
+        .accessibilityIdentifier("workout-personal-bests")
     }
 }
 

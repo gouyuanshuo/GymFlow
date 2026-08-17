@@ -1,6 +1,8 @@
+import SwiftData
 import SwiftUI
 
 struct WorkoutHistoryDetailView: View {
+    @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var allSessions: [WorkoutSession]
     let session: WorkoutSession
     @State private var sharePresentation: WorkoutSharePresentation?
     @State private var errorMessage: String?
@@ -71,7 +73,10 @@ struct WorkoutHistoryDetailView: View {
     private func prepareShare() {
         do {
             sharePresentation = WorkoutSharePresentation(
-                summary: try WorkoutShareSummaryBuilder.build(from: session)
+                summary: try WorkoutShareSummaryBuilder.build(
+                    from: session,
+                    sessions: allSessions
+                )
             )
         } catch {
             errorMessage = error.localizedDescription

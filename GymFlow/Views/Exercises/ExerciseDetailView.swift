@@ -30,7 +30,12 @@ struct ExerciseDetailView: View {
         }
     }
 
+    private var bestSummary: ExerciseBestSummary {
+        ExercisePerformanceService.summary(for: exercise, sessions: sessions)
+    }
+
     var body: some View {
+        let summary = bestSummary
         List {
             Section("Exercise") {
                 LabeledContent("Primary muscle", value: exercise.muscleGroup)
@@ -59,6 +64,9 @@ struct ExerciseDetailView: View {
                     Text(exercise.notes)
                 }
             }
+
+            personalBestsSection(summary)
+            bestHistorySection(summary)
 
             Section("Recent Workouts") {
                 if recentPerformance.isEmpty {
@@ -134,6 +142,74 @@ struct ExerciseDetailView: View {
         }
     }
 
+    @ViewBuilder
+    private func personalBestsSection(_ summary: ExerciseBestSummary) -> some View {
+        Section("Personal Bests") {
+            if summary.isEmpty {
+                Text("Complete a working set to establish Personal Bests for this exercise.")
+                    .foregroundStyle(.secondary)
+            } else {
+                if let record = summary.heaviestWeightRecord {
+                    PersonalBestRow(
+                        title: "Heaviest Weight",
+                        value: "\(GymFlowFormatters.weight(record.weight)) kg",
+                        detail: record.setDescription,
+                        date: record.workoutDate,
+                        icon: "scalemass.fill"
+                    )
+                }
+
+                if let record = summary.estimatedOneRepMaxRecord,
+                   let estimated = record.estimatedOneRepMax {
+                    PersonalBestRow(
+                        title: "Estimated 1RM",
+                        value: "\(GymFlowFormatters.weight(estimated)) kg",
+                        detail: record.setDescription,
+                        date: record.workoutDate,
+                        icon: "gauge.with.dots.needle.67percent"
+                    )
+                }
+
+                if let record = summary.bestSetVolumeRecord {
+                    PersonalBestRow(
+                        title: "Best Set Volume",
+                        value: "\(GymFlowFormatters.weight(record.setVolume)) kg",
+                        detail: record.setDescription,
+                        date: record.workoutDate,
+                        icon: "chart.bar.fill"
+                    )
+                }
+
+                if let record = summary.bestRepetitionRecord {
+                    PersonalBestRow(
+                        title: record.weight > 0 ? "Best Reps at Relevant Load" : "Best Repetitions",
+                        value: record.setDescription,
+                        detail: record.weight > 0 ? "At least half of max load" : "Bodyweight",
+                        date: record.workoutDate,
+                        icon: "repeat"
+                    )
+                }
+            }
+        }
+        .accessibilityIdentifier("exercise-personal-bests")
+    }
+
+    @ViewBuilder
+    private func bestHistorySection(_ summary: ExerciseBestSummary) -> some View {
+        if !summary.personalBestEvents.isEmpty {
+            Section {
+                ForEach(summary.personalBestEvents.prefix(8)) { event in
+                    PersonalBestEventRow(event: event)
+                }
+            } header: {
+                Text("Best History")
+            } footer: {
+                Text("Estimated 1RM uses the Epley formula for completed working sets of 1–15 reps.")
+            }
+            .accessibilityIdentifier("exercise-best-history")
+        }
+    }
+
     private func optionalValue(_ value: Int?) -> String {
         value.map(String.init) ?? "Not set"
     }
@@ -163,6 +239,76 @@ struct ExerciseDetailView: View {
         } catch {
             errorMessage = "\(prefix) \(error.localizedDescription)"
         }
+    }
+}
+
+private struct PersonalBestRow: View {
+    let title: String
+    let value: String
+    let detail: String
+    let date: Date
+    let icon: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.headline)
+                .foregroundStyle(.tint)
+                .frame(width: 28, height: 28)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.title3.weight(.bold))
+                    .monospacedDigit()
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+
+            Text(date, format: .dateTime.day().month(.abbreviated).year())
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct PersonalBestEventRow: View {
+    let event: ExercisePREvent
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(event.record.workoutDate, format: .dateTime.day().month(.abbreviated))
+                .font(.subheadline.monospacedDigit().weight(.semibold))
+                .frame(width: 54, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(event.record.setDescription)
+                    .font(.headline)
+                if let metricDescription = event.metricDescription {
+                    Text(metricDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            Text(event.typeDescription)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.tint)
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(.vertical, 3)
+        .accessibilityElement(children: .combine)
     }
 }
 
