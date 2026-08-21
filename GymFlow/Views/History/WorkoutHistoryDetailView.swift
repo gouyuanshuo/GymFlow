@@ -1,9 +1,15 @@
+import SwiftData
 import SwiftUI
 
 struct WorkoutHistoryDetailView: View {
+    @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var allSessions: [WorkoutSession]
     let session: WorkoutSession
+    @State private var sharePresentation: WorkoutSharePresentation?
+    @State private var errorMessage: String?
 
     var body: some View {
+        let totals = session.totals
+
         List {
             Section {
                 LabeledContent("Started", value: session.startedAt.formatted(date: .abbreviated, time: .shortened))
@@ -11,10 +17,20 @@ struct WorkoutHistoryDetailView: View {
                     LabeledContent("Completed", value: completedAt.formatted(date: .omitted, time: .shortened))
                 }
                 LabeledContent("Duration", value: GymFlowFormatters.duration(session.duration))
-                LabeledContent("Total volume", value: "\(GymFlowFormatters.weight(session.trainingVolume)) kg")
-                LabeledContent("Total repetitions", value: "\(session.totalRepetitions)")
+                LabeledContent("Total volume", value: "\(GymFlowFormatters.weight(totals.volume)) kg")
+                LabeledContent("Total repetitions", value: "\(totals.repetitions)")
                 if !session.notes.isEmpty { Text(session.notes) }
             } header: { Text("Summary") }
+
+            Section {
+                Button {
+                    prepareShare()
+                } label: {
+                    Label("Share Workout", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .accessibilityIdentifier("share-history-workout")
+            }
 
             ForEach(session.orderedExerciseRecords) { exercise in
                 Section {
@@ -22,7 +38,10 @@ struct WorkoutHistoryDetailView: View {
                         HStack {
                             Text(set.isWarmup ? "Warm-up" : "Set \(set.setNumber)")
                             Spacer()
-                            Text("\(GymFlowFormatters.weight(set.weight)) kg × \(set.repetitions)")
+                            Text(GymFlowFormatters.set(
+                                weight: set.weight,
+                                repetitions: set.repetitions
+                            ))
                                 .monospacedDigit()
                         }
                     }
@@ -41,5 +60,24 @@ struct WorkoutHistoryDetailView: View {
         }
         .navigationTitle(session.planNameSnapshot)
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $sharePresentation) { presentation in
+            NavigationStack {
+                WorkoutSharePreviewView(summary: presentation.summary)
+            }
+        }
+        .errorAlert("Couldn’t Share Workout", message: $errorMessage)
+    }
+
+    private func prepareShare() {
+        do {
+            sharePresentation = WorkoutSharePresentation(
+                summary: try WorkoutShareSummaryBuilder.build(
+                    from: session,
+                    sessions: allSessions
+                )
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }

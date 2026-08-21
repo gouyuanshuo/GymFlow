@@ -5,7 +5,9 @@ struct PlanEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \WorkoutPlan.sortOrder) private var plans: [WorkoutPlan]
-    @AppStorage("defaultRestDuration") private var defaultRestDuration = 90
+    @Query(sort: \Playlist.sortOrder) private var playlists: [Playlist]
+    @Query(sort: \ExerciseDefinition.name) private var definitions: [ExerciseDefinition]
+    @AppStorage(PreferenceKey.defaultRestDuration) private var defaultRestDuration = 90
     let plan: WorkoutPlan?
     @State private var draft: PlanDraft
     @State private var exercisePickerPresented = false
@@ -26,6 +28,20 @@ struct PlanEditorView: View {
                     .lineLimit(2...5)
             }
 
+            Section("Workout Music") {
+                Picker("Assigned playlist", selection: $draft.assignedPlaylistID) {
+                    Text("None").tag(nil as UUID?)
+                    ForEach(playlists) { playlist in
+                        Text(playlist.name).tag(Optional(playlist.id))
+                    }
+                }
+                if playlists.isEmpty {
+                    Text("Create a playlist in Music to assign it to this workout.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section {
                 if draft.exercises.isEmpty {
                     Text("Add at least one exercise when you are ready.")
@@ -33,10 +49,13 @@ struct PlanEditorView: View {
                 }
                 ForEach($draft.exercises) { $exercise in
                     NavigationLink {
-                        PlannedExerciseEditor(draft: $exercise)
+                        PlannedExerciseEditor(
+                            draft: $exercise,
+                            exerciseName: resolvedName(for: exercise)
+                        )
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(exercise.name).font(.headline)
+                            Text(resolvedName(for: exercise)).font(.headline)
                             Text("\(exercise.targetSets) × \(exercise.targetRepetitions) • \(GymFlowFormatters.weight(exercise.targetWeight)) kg • \(exercise.restSeconds)s rest")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -75,12 +94,7 @@ struct PlanEditorView: View {
                 ))
             }
         }
-        .alert("Can’t Save Plan", isPresented: Binding(
-            get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: { Text(errorMessage ?? "Unknown error") }
+        .errorAlert("Can’t Save Plan", message: $errorMessage)
     }
 
     private func save() {
@@ -99,7 +113,7 @@ struct PlanEditorView: View {
             let savedExercises = draft.exercises.enumerated().map { index, exercise in
                 PlannedExercise(
                     exerciseID: exercise.exerciseID,
-                    exerciseNameSnapshot: exercise.name.trimmingCharacters(in: .whitespacesAndNewlines),
+                    exerciseNameSnapshot: resolvedName(for: exercise),
                     targetSets: exercise.targetSets,
                     targetRepetitions: exercise.targetRepetitions,
                     targetWeight: exercise.targetWeight,
@@ -115,6 +129,7 @@ struct PlanEditorView: View {
                 obsolete.forEach(modelContext.delete)
                 plan.name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
                 plan.notes = draft.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+                plan.assignedPlaylistID = draft.assignedPlaylistID
                 plan.updatedAt = Date()
             } else {
                 let nextOrder = (plans.map(\.sortOrder).max() ?? -1) + 1
@@ -122,6 +137,7 @@ struct PlanEditorView: View {
                     name: draft.name.trimmingCharacters(in: .whitespacesAndNewlines),
                     notes: draft.notes.trimmingCharacters(in: .whitespacesAndNewlines),
                     sortOrder: nextOrder,
+                    assignedPlaylistID: draft.assignedPlaylistID,
                     exercises: savedExercises
                 ))
             }
@@ -131,15 +147,24 @@ struct PlanEditorView: View {
             errorMessage = error.localizedDescription
         }
     }
+
+    private func resolvedName(for exercise: PlannedExerciseDraft) -> String {
+        guard let exerciseID = exercise.exerciseID,
+              let definition = definitions.first(where: { $0.id == exerciseID }) else {
+            return exercise.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return definition.name
+    }
 }
 
 private struct PlannedExerciseEditor: View {
     @Binding var draft: PlannedExerciseDraft
+    let exerciseName: String
 
     var body: some View {
         Form {
             Section("Exercise") {
-                Text(draft.name).font(.headline)
+                Text(exerciseName).font(.headline)
                 TextField("Exercise notes", text: $draft.notes, axis: .vertical)
                     .lineLimit(2...5)
             }
@@ -158,7 +183,7 @@ private struct PlannedExerciseEditor: View {
                 Stepper("Rest: \(draft.restSeconds) seconds", value: $draft.restSeconds, in: 0...900, step: 15)
             }
         }
-        .navigationTitle(draft.name)
+        .navigationTitle(exerciseName)
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: draft.targetWeight) { _, value in
             if value < 0 { draft.targetWeight = 0 }
