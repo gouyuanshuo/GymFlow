@@ -186,18 +186,30 @@ enum SampleDataSeeder {
     private static func makePlan(
         name: String,
         order: Int,
-        exercises: [(String, Int, Int, Double, Int)]
+        exercises: [SamplePlanExercise]
     ) -> WorkoutPlan {
-        let plannedExercises = exercises.enumerated().map { index, values in
+        let plannedExercises = exercises.enumerated().map { index, exercise in
             PlannedExercise(
-                exerciseNameSnapshot: values.0,
-                targetSets: values.1,
-                targetRepetitions: values.2,
-                targetWeight: values.3,
-                restSeconds: values.4,
+                exerciseNameSnapshot: exercise.name,
+                targetSets: exercise.sets,
+                targetRepetitions: exercise.repetitions,
+                targetWeight: exercise.weight,
+                restSeconds: exercise.restSeconds,
                 sortOrder: index
             )
         }
         return WorkoutPlan(name: name, sortOrder: order, exercises: plannedExercises)
     }
 }
+
+/// One line of a built-in sample plan.
+///
+/// A labelled tuple rather than a bare `(String, Int, Int, Double, Int)`, so the sample plan tables
+/// above read as exercise data instead of as five positional numbers.
+private typealias SamplePlanExercise = (
+    name: String,
+    sets: Int,
+    repetitions: Int,
+    weight: Double,
+    restSeconds: Int
+)

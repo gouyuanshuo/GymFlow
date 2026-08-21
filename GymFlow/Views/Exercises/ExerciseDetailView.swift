@@ -5,7 +5,17 @@ struct ExerciseDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query private var plans: [WorkoutPlan]
+    /// Every session, including in-progress ones, because "is this exercise in use?" must consider
+    /// them all.
     @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
+    /// Performance history only comes from finished workouts, so the store filters those out here
+    /// rather than every derived value rescanning the full history.
+    @Query(
+        filter: WorkoutSession.predicate(status: .completed),
+        sort: \WorkoutSession.startedAt,
+        order: .reverse
+    )
+    private var completedSessions: [WorkoutSession]
 
     let exercise: ExerciseDefinition
     @State private var editorPresented = false
@@ -16,26 +26,31 @@ struct ExerciseDetailView: View {
         ExerciseLibraryService.isUsed(exercise, plans: plans, sessions: sessions)
     }
 
+    /// The most recent sessions in which this exercise was actually trained.
+    ///
+    /// Only the first few are shown, so the scan stops as soon as enough have been found instead of
+    /// walking the user's entire history.
     private var recentPerformance: [ExercisePerformanceItem] {
-        sessions.compactMap { session in
-            guard session.status == .completed,
-                  let record = session.orderedExerciseRecords.first(where: { record in
-                      record.exerciseID == exercise.id
-                          || (record.exerciseID == nil
-                              && ExerciseLibraryService.normalizedName(record.exerciseNameSnapshot)
-                                == ExerciseLibraryService.normalizedName(exercise.name))
-                  }),
-                  record.orderedSets.contains(where: \.isCompleted) else { return nil }
-            return ExercisePerformanceItem(session: session, record: record)
+        let identity = ExerciseIdentity(exercise)
+        var items: [ExercisePerformanceItem] = []
+        for session in completedSessions {
+            guard let record = session.orderedExerciseRecords.first(where: identity.matches),
+                  record.orderedSets.contains(where: \.isCompleted) else { continue }
+            items.append(ExercisePerformanceItem(session: session, record: record))
+            if items.count == Self.recentPerformanceLimit { break }
         }
+        return items
     }
 
     private var bestSummary: ExerciseBestSummary {
-        ExercisePerformanceService.summary(for: exercise, sessions: sessions)
+        ExercisePerformanceService.summary(for: exercise, sessions: completedSessions)
     }
+
+    private static let recentPerformanceLimit = 8
 
     var body: some View {
         let summary = bestSummary
+        let recentPerformance = recentPerformance
         List {
             Section("Exercise") {
                 LabeledContent("Primary muscle", value: exercise.muscleGroup)
@@ -73,12 +88,12 @@ struct ExerciseDetailView: View {
                     Text("Complete this exercise in a workout to see recent performance.")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(recentPerformance.prefix(8)) { item in
+                    ForEach(recentPerformance) { item in
                         VStack(alignment: .leading, spacing: 5) {
                             Text(item.session.startedAt, format: .dateTime.month(.abbreviated).day().year())
                                 .font(.headline)
                             Text(item.completedSets.map {
-                                "\(GymFlowFormatters.weight($0.weight)) kg × \($0.repetitions)"
+                                GymFlowFormatters.set(weight: $0.weight, repetitions: $0.repetitions)
                             }.joined(separator: "  •  "))
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -132,14 +147,7 @@ struct ExerciseDetailView: View {
         } message: {
             Text("This unused exercise will be permanently removed. This action cannot be undone.")
         }
-        .alert("Exercise Error", isPresented: Binding(
-            get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(errorMessage ?? "An unknown error occurred.")
-        }
+        .errorAlert("Exercise Error", message: $errorMessage)
     }
 
     @ViewBuilder

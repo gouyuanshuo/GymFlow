@@ -29,22 +29,31 @@ enum WorkoutShareBackground: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Whether the artwork is light enough to need dark text drawn over it.
+    ///
+    /// Every colour below and the card's legibility overlay branch on this one fact, so a new light
+    /// background only has to be listed here rather than added to each colour in turn.
+    var isLight: Bool {
+        switch self {
+        case .arctic: true
+        default: false
+        }
+    }
+
     var foregroundColor: Color {
-        self == .arctic ? Color(red: 0.04, green: 0.08, blue: 0.14) : .white
+        isLight ? Color(red: 0.04, green: 0.08, blue: 0.14) : .white
     }
 
     var secondaryForegroundColor: Color {
-        self == .arctic
-            ? Color(red: 0.17, green: 0.25, blue: 0.34)
-            : Color.white.opacity(0.72)
+        isLight ? Color(red: 0.17, green: 0.25, blue: 0.34) : Color.white.opacity(0.72)
     }
 
     var panelColor: Color {
-        self == .arctic ? Color.white.opacity(0.62) : Color.black.opacity(0.23)
+        isLight ? Color.white.opacity(0.62) : Color.black.opacity(0.23)
     }
 
     var separatorColor: Color {
-        self == .arctic ? Color.black.opacity(0.12) : Color.white.opacity(0.16)
+        isLight ? Color.black.opacity(0.12) : Color.white.opacity(0.16)
     }
 }
 

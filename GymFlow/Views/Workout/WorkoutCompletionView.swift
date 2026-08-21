@@ -4,7 +4,9 @@ import SwiftUI
 struct WorkoutCompletionView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var allSessions: [WorkoutSession]
-    let session: WorkoutSession
+    /// `@Bindable` so the notes field binds straight to the model instead of through a
+    /// hand-written `Binding(get:set:)`.
+    @Bindable var session: WorkoutSession
     let onDone: () -> Void
     @State private var errorMessage: String?
     @State private var sharePresentation: WorkoutSharePresentation?
@@ -15,6 +17,8 @@ struct WorkoutCompletionView: View {
 
     var body: some View {
         let newPersonalBestEvents = personalBestEvents
+        // Read once: the four metric tiles below would otherwise each rescan every logged set.
+        let totals = session.totals
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
@@ -29,13 +33,13 @@ struct WorkoutCompletionView: View {
 
                     LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 12) {
                         SummaryMetric(title: "Duration", value: GymFlowFormatters.duration(session.duration), icon: "clock")
-                        SummaryMetric(title: "Exercises", value: "\(session.completedExerciseCount)", icon: "dumbbell")
-                        SummaryMetric(title: "Sets", value: "\(session.completedSetCount)", icon: "checklist")
-                        SummaryMetric(title: "Repetitions", value: "\(session.totalRepetitions)", icon: "repeat")
+                        SummaryMetric(title: "Exercises", value: "\(totals.exerciseCount)", icon: "dumbbell")
+                        SummaryMetric(title: "Sets", value: "\(totals.setCount)", icon: "checklist")
+                        SummaryMetric(title: "Repetitions", value: "\(totals.repetitions)", icon: "repeat")
                     }
                     SummaryMetric(
                         title: "Training Volume",
-                        value: "\(GymFlowFormatters.weight(session.trainingVolume)) kg",
+                        value: "\(GymFlowFormatters.weight(totals.volume)) kg",
                         icon: "scalemass"
                     )
                     if let playlistName = session.playlistNameSnapshot {
@@ -60,11 +64,10 @@ struct WorkoutCompletionView: View {
 
                     VStack(alignment: .leading) {
                         Text("Workout Notes").font(.headline)
-                        TextEditor(text: Binding(
-                            get: { session.notes }, set: { session.notes = $0 }
-                        ))
-                        .frame(minHeight: 100)
-                        .scrollContentBackground(.hidden)
+                        TextEditor(text: $session.notes)
+                            .frame(minHeight: 100)
+                            .scrollContentBackground(.hidden)
+                            .accessibilityLabel("Workout notes")
                     }
                     .gymCard()
 
@@ -79,9 +82,7 @@ struct WorkoutCompletionView: View {
                     WorkoutSharePreviewView(summary: presentation.summary)
                 }
             }
-            .alert("Workout Error", isPresented: Binding(
-                get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
-            )) { Button("OK", role: .cancel) { } } message: { Text(errorMessage ?? "Unknown error") }
+            .errorAlert("Workout Error", message: $errorMessage)
         }
     }
 

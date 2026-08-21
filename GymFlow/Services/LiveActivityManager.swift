@@ -58,6 +58,10 @@ final class LiveActivityManager {
         category: "LiveActivity"
     )
     private var endedSessionIDs: Set<UUID> = []
+    /// The most recently enqueued Live Activity update. Each new update awaits this one first so
+    /// rapid state changes (start rest, skip, +30s) land on the widget in the order they happened
+    /// rather than racing and leaving a stale timer on screen.
+    private var pendingUpdate: Task<Void, Never>?
     private(set) var lastError: String?
 
     init(defaults: UserDefaults = .standard) {
@@ -99,17 +103,30 @@ final class LiveActivityManager {
         let state = contentState(from: session.snapshot)
         if let identifier = plan.activityIDToKeep,
            let activity = activities.first(where: { $0.id == identifier }) {
-            Task {
-                await activity.update(content(for: state))
-                guard !endedSessionIDs.contains(session.sessionID) else { return }
-                record(activity: activity, session: session, now: now)
-                logger.debug("Updated workout Live Activity \(activity.id, privacy: .public)")
-            }
+            enqueueUpdate(of: activity, to: state, session: session, now: now)
         } else if plan.shouldStartActivity {
             requestActivity(for: session, state: state, now: now)
         }
 
         return plan
+    }
+
+    /// Serializes Live Activity updates by chaining each one onto the previously enqueued update.
+    private func enqueueUpdate(
+        of activity: Activity<WorkoutActivityAttributes>,
+        to state: WorkoutActivityAttributes.ContentState,
+        session: WorkoutActivitySessionState,
+        now: Date
+    ) {
+        let previous = pendingUpdate
+        pendingUpdate = Task { [weak self] in
+            await previous?.value
+            guard let self else { return }
+            await activity.update(self.content(for: state))
+            guard !self.endedSessionIDs.contains(session.sessionID) else { return }
+            self.record(activity: activity, session: session, now: now)
+            self.logger.debug("Updated workout Live Activity \(activity.id, privacy: .public)")
+        }
     }
 
     func reconcilePersistedWorkouts(
@@ -135,7 +152,7 @@ final class LiveActivityManager {
             session.completedAt = now
             RestTimerService.clearPersistedState(
                 defaults: defaults,
-                keyPrefix: "restTimer.\(session.id.uuidString)"
+                keyPrefix: RestTimerStorage.keyPrefix(for: session.id)
             )
             RestTimerNotificationScheduler.shared.cancel(
                 identifier: RestTimerNotificationScheduler.identifier(for: session.id)
@@ -322,21 +339,16 @@ final class LiveActivityManager {
 
     func snapshot(for session: WorkoutSession, now: Date = Date()) -> WorkoutActivitySnapshot {
         let exercises = session.orderedExerciseRecords
-        let savedIndex = session.currentExerciseIndex ?? exercises.firstIndex(where: {
-            $0.orderedSets.contains(where: { !$0.isCompleted })
-        }) ?? 0
+        let savedIndex = session.currentExerciseIndex
+            ?? exercises.firstIndex(where: { $0.firstIncompleteSet != nil })
+            ?? 0
         let exerciseIndex = min(max(0, savedIndex), max(0, exercises.count - 1))
         let exercise = exercises.indices.contains(exerciseIndex) ? exercises[exerciseIndex] : nil
-        let incompleteSet = exercise?.orderedSets.first(where: {
-            if let savedNumber = session.currentSetNumber {
-                return $0.setNumber == savedNumber && !$0.isCompleted
-            }
-            return !$0.isCompleted
-        }) ?? exercise?.orderedSets.first(where: { !$0.isCompleted })
+        let incompleteSet = exercise?.currentSet(preferring: session.currentSetNumber)
+        // Once the exercise is finished there is no "current" set, but the widget still has to name
+        // one, so it shows the last set the user logged.
         let displaySet = incompleteSet ?? exercise?.orderedSets.last
-        let completedExercises = exercises.filter { record in
-            !record.orderedSets.isEmpty && record.orderedSets.allSatisfy(\.isCompleted)
-        }.count
+        let completedExercises = exercises.filter(\.isFullyCompleted).count
         var latestCompleted: (exercise: ExerciseRecord, set: WorkoutSetRecord)?
         for completedExercise in exercises {
             for completedSet in completedExercise.orderedSets
@@ -349,7 +361,7 @@ final class LiveActivityManager {
         }
         let timerState = RestTimerService.persistedActivityState(
             defaults: defaults,
-            keyPrefix: "restTimer.\(session.id.uuidString)",
+            keyPrefix: RestTimerStorage.keyPrefix(for: session.id),
             now: now
         )
         return WorkoutActivitySnapshot(

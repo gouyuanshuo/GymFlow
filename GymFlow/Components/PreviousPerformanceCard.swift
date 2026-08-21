@@ -11,18 +11,19 @@ struct PreviousPerformanceCard: View {
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
                     ForEach(sets) { set in
-                        Text(
-                            "\(GymFlowFormatters.weight(set.weight)) kg × \(set.repetitions)"
-                        )
-                        .font(.caption.weight(.medium))
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(.quaternary, in: Capsule())
-                        .accessibilityLabel(
-                            "\(GymFlowFormatters.weight(set.weight)) kilograms, \(set.repetitions) repetitions"
-                        )
+                        Text(GymFlowFormatters.set(weight: set.weight, repetitions: set.repetitions))
+                            .font(.caption.weight(.medium))
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(.quaternary, in: Capsule())
+                            .accessibilityLabel(
+                                GymFlowFormatters.setAccessibilityLabel(
+                                    weight: set.weight,
+                                    repetitions: set.repetitions
+                                )
+                            )
                     }
                 }
             }

@@ -112,6 +112,7 @@ struct WorkoutSetCard: View {
     }
 }
 
+/// A labelled field that opens a wheel picker instead of a keyboard, for weight and repetitions.
 private struct WorkoutValueButton: View {
     let title: String
     let unit: String?
@@ -120,24 +121,6 @@ private struct WorkoutValueButton: View {
     let accessibilityValue: String
     let accessibilityIdentifier: String
     let action: () -> Void
-
-    init(
-        title: String,
-        unit: String? = nil,
-        value: String,
-        accessibilityLabel: String,
-        accessibilityValue: String,
-        accessibilityIdentifier: String,
-        action: @escaping () -> Void
-    ) {
-        self.title = title
-        self.unit = unit
-        self.value = value
-        self.accessibilityLabel = accessibilityLabel
-        self.accessibilityValue = accessibilityValue
-        self.accessibilityIdentifier = accessibilityIdentifier
-        self.action = action
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -148,10 +131,9 @@ private struct WorkoutValueButton: View {
             Button(action: action) {
                 HStack(spacing: 6) {
                     Text(value)
-                    .font(.title3.monospacedDigit().weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .frame(maxWidth: .infinity, minHeight: 48)
-                    .multilineTextAlignment(.leading)
+                        .font(.title3.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     if let unit {
                         Text(unit)

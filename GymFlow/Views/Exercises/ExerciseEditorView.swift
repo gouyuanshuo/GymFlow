@@ -120,14 +120,7 @@ struct ExerciseEditorView: View {
         .onChange(of: muscleGroup) { _, newValue in
             secondaryMuscleGroups.remove(newValue)
         }
-        .alert("Can’t Save Exercise", isPresented: Binding(
-            get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(errorMessage ?? "An unknown error occurred.")
-        }
+        .errorAlert("Can’t Save Exercise", message: $errorMessage)
     }
 
     private var primaryMuscleOptions: [String] {

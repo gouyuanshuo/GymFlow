@@ -88,14 +88,7 @@ struct PlaylistDetailView: View {
             Button("Save") { rename() }
             Button("Cancel", role: .cancel) { }
         }
-        .alert("Playlist Error", isPresented: Binding(
-            get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(errorMessage ?? "Unknown error")
-        }
+        .errorAlert("Playlist Error", message: $errorMessage)
     }
 
     private var summary: String {

@@ -34,7 +34,7 @@ struct CalendarDayDetailView: View {
                                             .foregroundStyle(.secondary)
                                     } else {
                                         Text(completedSets.map {
-                                            "\(GymFlowFormatters.weight($0.weight)) kg × \($0.repetitions)"
+                                            GymFlowFormatters.set(weight: $0.weight, repetitions: $0.repetitions)
                                         }.joined(separator: "  •  "))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)

@@ -64,23 +64,17 @@ struct PlaylistsView: View {
         } message: {
             Text("Choose a short, recognizable name.")
         }
-        .confirmationDialog("Delete this playlist?", isPresented: Binding(
-            get: { pendingDeletion != nil },
-            set: { if !$0 { pendingDeletion = nil } }
-        ), titleVisibility: .visible) {
+        .confirmationDialog(
+            "Delete this playlist?",
+            isPresented: $pendingDeletion.isPresent(),
+            titleVisibility: .visible
+        ) {
             Button("Delete Playlist", role: .destructive) { deletePending() }
             Button("Cancel", role: .cancel) { pendingDeletion = nil }
         } message: {
             Text("Imported audio files will remain in your music library.")
         }
-        .alert("Playlist Error", isPresented: Binding(
-            get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(errorMessage ?? "Unknown error")
-        }
+        .errorAlert("Playlist Error", message: $errorMessage)
     }
 
     private func trackCount(for playlist: Playlist) -> Int {

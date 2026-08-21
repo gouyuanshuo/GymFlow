@@ -12,23 +12,25 @@ struct WorkoutCalendarView: View {
         return value
     }
 
-    var body: some View {
-        let groupedSessions = WorkoutHistoryGrouper.groupCompletedSessions(
-            sessions,
-            calendar: calendar
-        )
-        let summary = WorkoutHistoryGrouper.summary(
-            inMonthContaining: displayedMonth,
+    /// Only the displayed month is on screen, so the grid and summary are derived from that month
+    /// alone rather than from every session ever recorded.
+    private var overview: WorkoutMonthOverview {
+        WorkoutHistoryGrouper.monthOverview(
+            containing: displayedMonth,
             sessions: sessions,
             calendar: calendar
         )
+    }
+
+    var body: some View {
+        let overview = overview
 
         ScrollView {
             VStack(spacing: 18) {
                 monthHeader
                 weekdayHeader
-                monthGrid(groupedSessions: groupedSessions)
-                MonthSummaryView(summary: summary)
+                monthGrid(sessionsByDay: overview.sessionsByDay)
+                MonthSummaryView(summary: overview.summary)
             }
             .padding(.horizontal)
             .padding(.bottom, 24)
@@ -87,12 +89,12 @@ struct WorkoutCalendarView: View {
         }
     }
 
-    private func monthGrid(groupedSessions: [Date: [WorkoutSession]]) -> some View {
+    private func monthGrid(sessionsByDay: [Date: [WorkoutSession]]) -> some View {
         LazyVGrid(columns: gridColumns, spacing: 8) {
             ForEach(Array(monthDates.enumerated()), id: \.offset) { _, date in
                 if let date {
                     let day = calendar.startOfDay(for: date)
-                    let daySessions = groupedSessions[day] ?? []
+                    let daySessions = sessionsByDay[day] ?? []
                     CalendarDayCell(
                         date: date,
                         workoutCount: daySessions.count,

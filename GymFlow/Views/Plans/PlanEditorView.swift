@@ -7,7 +7,7 @@ struct PlanEditorView: View {
     @Query(sort: \WorkoutPlan.sortOrder) private var plans: [WorkoutPlan]
     @Query(sort: \Playlist.sortOrder) private var playlists: [Playlist]
     @Query(sort: \ExerciseDefinition.name) private var definitions: [ExerciseDefinition]
-    @AppStorage("defaultRestDuration") private var defaultRestDuration = 90
+    @AppStorage(PreferenceKey.defaultRestDuration) private var defaultRestDuration = 90
     let plan: WorkoutPlan?
     @State private var draft: PlanDraft
     @State private var exercisePickerPresented = false
@@ -94,12 +94,7 @@ struct PlanEditorView: View {
                 ))
             }
         }
-        .alert("Can’t Save Plan", isPresented: Binding(
-            get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: { Text(errorMessage ?? "Unknown error") }
+        .errorAlert("Can’t Save Plan", message: $errorMessage)
     }
 
     private func save() {

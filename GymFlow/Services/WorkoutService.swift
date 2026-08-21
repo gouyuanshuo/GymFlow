@@ -31,8 +31,13 @@ enum WorkoutService {
         playlist: Playlist? = nil,
         now: Date = Date()
     ) -> WorkoutSession {
+        // Sorted once here rather than inside `latestRecord`, which is called for every exercise in
+        // the plan and would otherwise re-filter and re-sort the whole history each time.
+        let historyNewestFirst = previousSessions
+            .filter { $0.status == .completed }
+            .sorted { $0.startedAt > $1.startedAt }
         let records = plan.orderedExercises.map { exercise in
-            let previousRecord = latestRecord(for: exercise, in: previousSessions)
+            let previousRecord = latestRecord(for: exercise, in: historyNewestFirst)
             let sets = (1...max(1, exercise.targetSets)).map { setNumber in
                 let previousSet = previousRecord?.orderedSets.first(where: {
                     $0.setNumber == setNumber && $0.isCompleted
@@ -65,24 +70,18 @@ enum WorkoutService {
         )
     }
 
+    /// The last time this exercise was trained, given completed sessions already ordered
+    /// newest-first.
     private static func latestRecord(
         for exercise: PlannedExercise,
-        in sessions: [WorkoutSession]
+        in sessionsNewestFirst: [WorkoutSession]
     ) -> ExerciseRecord? {
-        sessions
-            .filter { $0.status == .completed }
-            .sorted { $0.startedAt > $1.startedAt }
-            .lazy
-            .compactMap { session in
-                session.orderedExerciseRecords.first { record in
-                    if let exerciseID = exercise.exerciseID, let recordID = record.exerciseID {
-                        return exerciseID == recordID
-                    }
-                    return exercise.exerciseNameSnapshot.caseInsensitiveCompare(
-                        record.exerciseNameSnapshot
-                    ) == .orderedSame
-                }
-            }
+        let identity = ExerciseIdentity(
+            id: exercise.exerciseID,
+            name: exercise.exerciseNameSnapshot
+        )
+        return sessionsNewestFirst.lazy
+            .compactMap { $0.orderedExerciseRecords.first(where: identity.matches) }
             .first
     }
 }

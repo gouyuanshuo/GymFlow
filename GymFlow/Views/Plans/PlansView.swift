@@ -58,21 +58,13 @@ struct PlansView: View {
                 NavigationStack { PlanEditorView(plan: presentation.plan) }
                     .interactiveDismissDisabled()
             }
-            .alert("Delete Workout Plan?", isPresented: Binding(
-                get: { pendingDeletion != nil },
-                set: { if !$0 { pendingDeletion = nil } }
-            )) {
+            .alert("Delete Workout Plan?", isPresented: $pendingDeletion.isPresent()) {
                 Button("Delete", role: .destructive) { deletePendingPlan() }
                 Button("Cancel", role: .cancel) { pendingDeletion = nil }
             } message: {
                 Text("Past workout history will be kept. This action cannot be undone.")
             }
-            .alert("Plan Error", isPresented: Binding(
-                get: { errorMessage != nil },
-                set: { if !$0 { errorMessage = nil } }
-            )) {
-                Button("OK", role: .cancel) { }
-            } message: { Text(errorMessage ?? "Unknown error") }
+            .errorAlert("Plan Error", message: $errorMessage)
         }
     }
 

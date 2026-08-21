@@ -13,10 +13,30 @@ struct MusicLibraryView: View {
     @State private var errorMessage: String?
     @State private var selectedSection: MusicSection = .library
     @State private var searchText = ""
-    @AppStorage("musicLibrarySort") private var sortRawValue = MusicLibrarySort.libraryOrder.rawValue
+    @AppStorage(PreferenceKey.musicLibrarySort) private var sortRawValue = MusicLibrarySort.libraryOrder.rawValue
 
     private var sortOrder: MusicLibrarySort {
         MusicLibrarySort(rawValue: sortRawValue) ?? .libraryOrder
+    }
+
+    /// This screen surfaces failures from its own work and from playback in one alert, so the two
+    /// sources are merged into a single optional message and cleared together on dismiss.
+    private var combinedErrorMessage: Binding<String?> {
+        Binding(
+            get: { errorMessage ?? audioPlayer.lastError },
+            set: { newValue in
+                guard newValue == nil else { return }
+                errorMessage = nil
+                audioPlayer.lastError = nil
+            }
+        )
+    }
+
+    /// Drag-to-reorder rewrites `sortOrder` from row offsets, so it is only meaningful when the
+    /// rows on screen are the whole library in library order. Under a search or an alternate sort
+    /// the visible offsets do not map onto the stored order.
+    private var isReorderable: Bool {
+        sortOrder == .libraryOrder && searchText.isEmpty
     }
 
     private var visibleTracks: [ImportedTrack] {
@@ -99,7 +119,7 @@ struct MusicLibraryView: View {
                                         }
                                     }
                                     .onMove(perform: moveTracks)
-                                    .moveDisabled(sortOrder != .libraryOrder)
+                                    .moveDisabled(!isReorderable)
                                 } header: {
                                     HStack {
                                         Text("Music Library")
@@ -143,20 +163,11 @@ struct MusicLibraryView: View {
                 allowsMultipleSelection: true,
                 onCompletion: handleImport
             )
-            .alert("Delete Imported Track?", isPresented: Binding(
-                get: { pendingDeletion != nil }, set: { if !$0 { pendingDeletion = nil } }
-            )) {
+            .alert("Delete Imported Track?", isPresented: $pendingDeletion.isPresent()) {
                 Button("Delete", role: .destructive) { deletePendingTrack() }
                 Button("Cancel", role: .cancel) { pendingDeletion = nil }
             } message: { Text("The copied audio file and all of its playlist memberships will be deleted from GymFlow.") }
-            .alert("Music Error", isPresented: Binding(
-                get: { errorMessage != nil || audioPlayer.lastError != nil },
-                set: {
-                    if !$0 { errorMessage = nil; audioPlayer.lastError = nil }
-                }
-            )) { Button("OK", role: .cancel) { } } message: {
-                Text(errorMessage ?? audioPlayer.lastError ?? "Unknown error")
-            }
+            .errorAlert("Music Error", message: combinedErrorMessage)
             .sheet(item: $pendingAddToPlaylist) { track in
                 AddToPlaylistView(track: track)
             }
@@ -201,11 +212,18 @@ struct MusicLibraryView: View {
     }
 
     private func moveTracks(from source: IndexSet, to destination: Int) {
-        var reordered = tracks
+        // The offsets come from the rendered rows, so reorder the same array the rows were built
+        // from. `isReorderable` guarantees that is the whole library in library order.
+        guard isReorderable else { return }
+        var reordered = visibleTracks
         reordered.move(fromOffsets: source, toOffset: destination)
         for (index, track) in reordered.enumerated() { track.sortOrder = index }
-        do { try modelContext.save(); audioPlayer.setPlaylist(reordered) }
-        catch { errorMessage = "The playlist order could not be saved. \(error.localizedDescription)" }
+        do {
+            try modelContext.save()
+            audioPlayer.updateLibraryOrder(reordered)
+        } catch {
+            errorMessage = "The playlist order could not be saved. \(error.localizedDescription)"
+        }
     }
 
     private func deletePendingTrack() {

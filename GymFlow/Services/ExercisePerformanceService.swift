@@ -54,10 +54,7 @@ struct ExercisePerformanceRecord: Identifiable, Equatable {
     }
 
     var setDescription: String {
-        if weight > 0 {
-            return "\(GymFlowFormatters.weight(weight)) kg × \(repetitions)"
-        }
-        return "\(repetitions) reps"
+        GymFlowFormatters.set(weight: weight, repetitions: repetitions)
     }
 }
 
@@ -135,24 +132,15 @@ enum ExercisePerformanceService {
         exerciseName: String,
         sessions: [WorkoutSession]
     ) -> ExerciseBestSummary {
+        let identity = ExerciseIdentity(id: exerciseID, name: exerciseName)
         let orderedSessions = validSessions(from: sessions)
         let records = orderedSessions.flatMap { session in
-            performanceRecords(
-                in: session,
-                matchingExerciseID: exerciseID,
-                exerciseName: exerciseName
-            )
+            performanceRecords(in: session, matching: identity)
         }
         let repRecords = bestRepRecordsByWeight(from: records)
-        let heaviest = bestRecord(in: records.filter { $0.weight > 0 }) { record in
-            record.weight
-        }
-        let bestEstimated = bestRecord(in: records.filter { $0.estimatedOneRepMax != nil }) {
-            $0.estimatedOneRepMax ?? 0
-        }
-        let bestVolume = bestRecord(in: records.filter { $0.setVolume > 0 }) {
-            $0.setVolume
-        }
+        let heaviest = bestRecord(in: records) { $0.weight > 0 ? $0.weight : nil }
+        let bestEstimated = bestRecord(in: records, value: \.estimatedOneRepMax)
+        let bestVolume = bestRecord(in: records) { $0.setVolume > 0 ? $0.setVolume : nil }
 
         return ExerciseBestSummary(
             heaviestWeightRecord: heaviest,
@@ -164,8 +152,7 @@ enum ExercisePerformanceService {
             bestSetVolumeRecord: bestVolume,
             repRecordsByWeight: repRecords,
             personalBestEvents: personalBestEvents(
-                exerciseID: exerciseID,
-                exerciseName: exerciseName,
+                matching: identity,
                 sessions: orderedSessions
             )
         )
@@ -184,21 +171,17 @@ enum ExercisePerformanceService {
         var processedExerciseIdentities: Set<String> = []
 
         for exerciseRecord in session.orderedExerciseRecords {
-            let identity = exerciseIdentityKey(for: exerciseRecord)
-            guard processedExerciseIdentities.insert(identity).inserted else { continue }
-            let currentRecords = performanceRecords(
-                in: session,
-                matchingExerciseID: exerciseRecord.exerciseID,
-                exerciseName: exerciseRecord.exerciseNameSnapshot
+            let key = exerciseIdentityKey(for: exerciseRecord)
+            guard processedExerciseIdentities.insert(key).inserted else { continue }
+            let identity = ExerciseIdentity(
+                id: exerciseRecord.exerciseID,
+                name: exerciseRecord.exerciseNameSnapshot
             )
+            let currentRecords = performanceRecords(in: session, matching: identity)
             guard !currentRecords.isEmpty else { continue }
 
             let previousRecords = priorSessions.flatMap { candidate in
-                performanceRecords(
-                    in: candidate,
-                    matchingExerciseID: exerciseRecord.exerciseID,
-                    exerciseName: exerciseRecord.exerciseNameSnapshot
-                )
+                performanceRecords(in: candidate, matching: identity)
             }
             let state = PerformanceState(records: previousRecords)
             events.append(contentsOf: recordEvents(in: currentRecords, comparedTo: state))
@@ -208,19 +191,14 @@ enum ExercisePerformanceService {
     }
 
     private static func personalBestEvents(
-        exerciseID: UUID?,
-        exerciseName: String,
+        matching identity: ExerciseIdentity,
         sessions: [WorkoutSession]
     ) -> [ExercisePREvent] {
         var state = PerformanceState()
         var events: [ExercisePREvent] = []
 
         for session in sessions {
-            let records = performanceRecords(
-                in: session,
-                matchingExerciseID: exerciseID,
-                exerciseName: exerciseName
-            )
+            let records = performanceRecords(in: session, matching: identity)
             guard !records.isEmpty else { continue }
             events.append(contentsOf: recordEvents(in: records, comparedTo: state))
             state.add(records)
@@ -236,22 +214,20 @@ enum ExercisePerformanceService {
         var typesBySetID: [UUID: Set<ExercisePRType>] = [:]
         var recordsBySetID: [UUID: ExercisePerformanceRecord] = [:]
 
-        if let weightRecord = bestRecord(in: records.filter { $0.weight > 0 }, value: { $0.weight }),
+        if let weightRecord = bestRecord(in: records, value: { $0.weight > 0 ? $0.weight : nil }),
            weightRecord.weight > state.maximumWeight + comparisonTolerance {
             typesBySetID[weightRecord.setID, default: []].insert(.weight)
             recordsBySetID[weightRecord.setID] = weightRecord
         }
 
-        if let estimatedRecord = bestRecord(
-            in: records.filter { $0.estimatedOneRepMax != nil },
-            value: { $0.estimatedOneRepMax ?? 0 }
-        ), let estimated = estimatedRecord.estimatedOneRepMax,
+        if let estimatedRecord = bestRecord(in: records, value: \.estimatedOneRepMax),
+           let estimated = estimatedRecord.estimatedOneRepMax,
            estimated > state.maximumEstimatedOneRepMax + comparisonTolerance {
             typesBySetID[estimatedRecord.setID, default: []].insert(.estimatedOneRepMax)
             recordsBySetID[estimatedRecord.setID] = estimatedRecord
         }
 
-        if let volumeRecord = bestRecord(in: records.filter { $0.setVolume > 0 }, value: { $0.setVolume }),
+        if let volumeRecord = bestRecord(in: records, value: { $0.setVolume > 0 ? $0.setVolume : nil }),
            volumeRecord.setVolume > state.maximumSetVolume + comparisonTolerance {
             typesBySetID[volumeRecord.setID, default: []].insert(.setVolume)
             recordsBySetID[volumeRecord.setID] = volumeRecord
@@ -276,19 +252,16 @@ enum ExercisePerformanceService {
         }
     }
 
+    /// The valid working sets logged for one exercise in one session.
+    ///
+    /// Takes a prepared ``ExerciseIdentity`` rather than an ID and a name, so a scan over many
+    /// sessions normalises the target name once instead of once per record it walks past.
     private static func performanceRecords(
         in session: WorkoutSession,
-        matchingExerciseID exerciseID: UUID?,
-        exerciseName: String
+        matching identity: ExerciseIdentity
     ) -> [ExercisePerformanceRecord] {
         guard let completedAt = validCompletionDate(for: session) else { return [] }
-        let matchingRecords = session.orderedExerciseRecords.filter {
-            matches(
-                record: $0,
-                exerciseID: exerciseID,
-                exerciseName: exerciseName
-            )
-        }
+        let matchingRecords = session.orderedExerciseRecords.filter(identity.matches)
 
         return matchingRecords.flatMap { exerciseRecord in
             exerciseRecord.orderedSets.compactMap { set in
@@ -343,18 +316,6 @@ enum ExercisePerformanceService {
             && (set.completedAt?.timeIntervalSinceReferenceDate.isFinite ?? true)
     }
 
-    private static func matches(
-        record: ExerciseRecord,
-        exerciseID: UUID?,
-        exerciseName: String
-    ) -> Bool {
-        if let recordExerciseID = record.exerciseID {
-            return exerciseID == recordExerciseID
-        }
-        return ExerciseLibraryService.normalizedName(record.exerciseNameSnapshot)
-            == ExerciseLibraryService.normalizedName(exerciseName)
-    }
-
     private static func occurs(_ candidate: WorkoutSession, before session: WorkoutSession) -> Bool {
         guard let candidateCompletion = candidate.completedAt,
               let sessionCompletion = session.completedAt else { return false }
@@ -367,13 +328,18 @@ enum ExercisePerformanceService {
         return candidate.id.uuidString < session.id.uuidString
     }
 
+    /// The record scoring highest on `value`, ignoring records the metric does not apply to.
+    ///
+    /// Returning `nil` from `value` excludes a record — a bodyweight set has no heaviest weight and
+    /// an unloaded set has no estimated one-rep max — so callers do not have to build a filtered
+    /// copy of the array for each metric they ask about.
     private static func bestRecord(
         in records: [ExercisePerformanceRecord],
-        value: (ExercisePerformanceRecord) -> Double
+        value: (ExercisePerformanceRecord) -> Double?
     ) -> ExercisePerformanceRecord? {
-        records.max { lhs, rhs in
-            let lhsValue = value(lhs)
-            let rhsValue = value(rhs)
+        records.filter { value($0) != nil }.max { lhs, rhs in
+            let lhsValue = value(lhs) ?? 0
+            let rhsValue = value(rhs) ?? 0
             if abs(lhsValue - rhsValue) > comparisonTolerance {
                 return lhsValue < rhsValue
             }
