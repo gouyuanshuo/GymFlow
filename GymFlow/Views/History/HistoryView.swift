@@ -3,17 +3,27 @@ import SwiftUI
 
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
+    /// Both presentations show finished workouts only, so the store filters them rather than the
+    /// view rescanning every session — including in-progress ones — on each render.
+    @Query(
+        filter: WorkoutSession.predicate(status: .completed),
+        sort: \WorkoutSession.startedAt,
+        order: .reverse
+    )
+    private var completedSessions: [WorkoutSession]
     @State private var presentation = HistoryPresentation.list
     @State private var searchText = ""
     @State private var pendingDeletion: WorkoutSession?
     @State private var errorMessage: String?
 
-    private var completedSessions: [WorkoutSession] {
-        sessions.filter { session in
-            guard session.status == .completed else { return false }
-            guard !searchText.isEmpty else { return true }
-            return session.planNameSnapshot.localizedCaseInsensitiveContains(searchText)
+    /// Workouts matching the search field, or all of them while it is empty.
+    ///
+    /// Matching an exercise name has to fault in every logged exercise of every workout, so the
+    /// plan name is tried first and the empty search short-circuits before any of it happens.
+    private var visibleSessions: [WorkoutSession] {
+        guard !searchText.isEmpty else { return completedSessions }
+        return completedSessions.filter { session in
+            session.planNameSnapshot.localizedCaseInsensitiveContains(searchText)
                 || session.exerciseRecords.contains {
                     $0.exerciseNameSnapshot.localizedCaseInsensitiveContains(searchText)
                 }
@@ -36,7 +46,7 @@ struct HistoryView: View {
                     historyList
                         .searchable(text: $searchText, prompt: "Plan or exercise")
                 } else {
-                    WorkoutCalendarView(sessions: sessions)
+                    WorkoutCalendarView(sessions: completedSessions)
                 }
             }
             .navigationTitle("History")
@@ -53,7 +63,8 @@ struct HistoryView: View {
 
     @ViewBuilder
     private var historyList: some View {
-        if completedSessions.isEmpty {
+        let visibleSessions = visibleSessions
+        if visibleSessions.isEmpty {
             ContentUnavailableView(
                 searchText.isEmpty ? "No Workout History" : "No Matches",
                 systemImage: "clock.arrow.circlepath",
@@ -62,7 +73,7 @@ struct HistoryView: View {
                     : "Try another plan or exercise name.")
             )
         } else {
-            List(completedSessions) { session in
+            List(visibleSessions) { session in
                 NavigationLink(value: session) {
                     HistoryRow(session: session)
                 }

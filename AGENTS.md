@@ -44,6 +44,33 @@ Run a build after every meaningful change and after each milestone. Continue fix
 - Use ordered relationships through explicit `sortOrder` values and sorted accessors.
 - Do not put production mock data in views; keep seeding in a dedicated service and test fixtures in test targets.
 
+## Formatting and lint
+
+Style is defined by `.swift-format`, read by Apple's `swift-format` (bundled with Xcode, so no
+dependency is added). It encodes the conventions above: four-space indentation, a 100-column limit,
+no force unwraps or force `try`, ordered imports, and triple-slash documentation comments.
+
+Lint before opening a change:
+
+```bash
+xcrun swift-format lint --recursive --parallel GymFlow GymFlowActivityShared GymFlowLiveActivityExtension GymFlowTests
+```
+
+Semantic rules must stay at zero findings. The pretty printer's whitespace opinions differ from the
+hand-laid-out SwiftUI bodies in this project; reflowing them with `swift-format format -i` is a
+deliberate, separate commit rather than something to mix into a feature change.
+
+## Performance conventions
+
+- Push filters into the store. A `@Query` predicate — see `WorkoutSession.predicate(status:)` — beats
+  fetching every session and filtering in the view, which faults in the whole relationship graph.
+- Do not hold a `@Query` for data a single action needs. Fetch it with a `FetchDescriptor` at the
+  moment of use, or the screen re-reads those tables on every redraw.
+- Read a derived value once per `body` and pass it down. `orderedSets`, `orderedExerciseRecords`, and
+  `totals` all rescan or re-sort on each access, and screens with a running timer redraw every second.
+- Cache a scan over history in `@State`, refreshed by `task`/`onChange`, rather than recomputing it in
+  `body` — a bound `TextEditor` re-runs `body` on every keystroke.
+
 ## Project hygiene
 
 - Update `PLANS.md` checkboxes and `PROGRESS.md` after each milestone, important failure, or architectural decision.

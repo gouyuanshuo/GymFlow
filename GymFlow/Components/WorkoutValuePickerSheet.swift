@@ -44,12 +44,12 @@ struct WorkoutValuePickerTransaction: Equatable {
     }
 
     var selectedWeight: Double {
-        guard case let .weight(value) = selectedValue else { return Self.minimumWeight }
+        guard case .weight(let value) = selectedValue else { return Self.minimumWeight }
         return value
     }
 
     var selectedRepetitions: Int {
-        guard case let .repetitions(value) = selectedValue else {
+        guard case .repetitions(let value) = selectedValue else {
             return Self.repetitionRange.lowerBound
         }
         return value
@@ -95,9 +95,9 @@ struct WorkoutValuePickerTransaction: Equatable {
 
     func commit(to set: WorkoutSetRecord) {
         switch selectedValue {
-        case let .weight(weight):
+        case .weight(let weight):
             set.weight = weight
-        case let .repetitions(repetitions):
+        case .repetitions(let repetitions):
             set.repetitions = repetitions
         }
     }
