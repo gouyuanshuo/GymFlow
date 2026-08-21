@@ -8,6 +8,8 @@ struct WorkoutHistoryDetailView: View {
     @State private var errorMessage: String?
 
     var body: some View {
+        let totals = session.totals
+
         List {
             Section {
                 LabeledContent("Started", value: session.startedAt.formatted(date: .abbreviated, time: .shortened))
@@ -15,8 +17,8 @@ struct WorkoutHistoryDetailView: View {
                     LabeledContent("Completed", value: completedAt.formatted(date: .omitted, time: .shortened))
                 }
                 LabeledContent("Duration", value: GymFlowFormatters.duration(session.duration))
-                LabeledContent("Total volume", value: "\(GymFlowFormatters.weight(session.trainingVolume)) kg")
-                LabeledContent("Total repetitions", value: "\(session.totalRepetitions)")
+                LabeledContent("Total volume", value: "\(GymFlowFormatters.weight(totals.volume)) kg")
+                LabeledContent("Total repetitions", value: "\(totals.repetitions)")
                 if !session.notes.isEmpty { Text(session.notes) }
             } header: { Text("Summary") }
 
@@ -36,7 +38,10 @@ struct WorkoutHistoryDetailView: View {
                         HStack {
                             Text(set.isWarmup ? "Warm-up" : "Set \(set.setNumber)")
                             Spacer()
-                            Text("\(GymFlowFormatters.weight(set.weight)) kg × \(set.repetitions)")
+                            Text(GymFlowFormatters.set(
+                                weight: set.weight,
+                                repetitions: set.repetitions
+                            ))
                                 .monospacedDigit()
                         }
                     }
@@ -60,14 +65,7 @@ struct WorkoutHistoryDetailView: View {
                 WorkoutSharePreviewView(summary: presentation.summary)
             }
         }
-        .alert("Couldn’t Share Workout", isPresented: Binding(
-            get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(errorMessage ?? "Unknown error")
-        }
+        .errorAlert("Couldn’t Share Workout", message: $errorMessage)
     }
 
     private func prepareShare() {

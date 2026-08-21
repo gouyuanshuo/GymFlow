@@ -78,14 +78,7 @@ struct WorkoutSharePreviewView: View {
                     .ignoresSafeArea()
             }
         }
-        .alert("Couldn’t Share Workout", isPresented: Binding(
-            get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(errorMessage ?? WorkoutShareError.imageRenderFailed.localizedDescription)
-        }
+        .errorAlert("Couldn’t Share Workout", message: $errorMessage)
     }
 
     private var shareAction: some View {

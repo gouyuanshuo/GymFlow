@@ -96,7 +96,7 @@ final class WorkoutActivityIntentCoordinator {
 
     func addThirtySeconds(sessionID: UUID, now: Date = Date()) async {
         guard let session = fetchActiveSession(id: sessionID) else { return }
-        let timerKey = "restTimer.\(sessionID.uuidString)"
+        let timerKey = RestTimerStorage.keyPrefix(for: sessionID)
         let persistedState = RestTimerService.persistedActivityState(
             defaults: defaults,
             keyPrefix: timerKey,
@@ -139,7 +139,7 @@ final class WorkoutActivityIntentCoordinator {
     private func makeTimer(for sessionID: UUID) -> RestTimerService {
         RestTimerService(
             defaults: defaults,
-            keyPrefix: "restTimer.\(sessionID.uuidString)",
+            keyPrefix: RestTimerStorage.keyPrefix(for: sessionID),
             sessionID: sessionID
         )
     }

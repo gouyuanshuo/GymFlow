@@ -65,14 +65,7 @@ struct PlaylistTrackPickerView: View {
                         .disabled(selection.isEmpty)
                 }
             }
-            .alert("Playlist Error", isPresented: Binding(
-                get: { errorMessage != nil },
-                set: { if !$0 { errorMessage = nil } }
-            )) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text(errorMessage ?? "Unknown error")
-            }
+            .errorAlert("Playlist Error", message: $errorMessage)
         }
     }
 

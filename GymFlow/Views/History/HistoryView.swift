@@ -43,15 +43,11 @@ struct HistoryView: View {
             .navigationDestination(for: WorkoutSession.self) { session in
                 WorkoutHistoryDetailView(session: session)
             }
-            .alert("Delete Workout History?", isPresented: Binding(
-                get: { pendingDeletion != nil }, set: { if !$0 { pendingDeletion = nil } }
-            )) {
+            .alert("Delete Workout History?", isPresented: $pendingDeletion.isPresent()) {
                 Button("Delete", role: .destructive) { deletePending() }
                 Button("Cancel", role: .cancel) { pendingDeletion = nil }
             } message: { Text("This completed workout cannot be recovered.") }
-            .alert("History Error", isPresented: Binding(
-                get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
-            )) { Button("OK", role: .cancel) { } } message: { Text(errorMessage ?? "Unknown error") }
+            .errorAlert("History Error", message: $errorMessage)
         }
     }
 
@@ -99,6 +95,9 @@ private struct HistoryRow: View {
     let session: WorkoutSession
 
     var body: some View {
+        // Read once per row: the three figures below all come from the same scan of the workout.
+        let totals = session.totals
+
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(session.planNameSnapshot).font(.headline)
@@ -107,10 +106,10 @@ private struct HistoryRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Text("\(GymFlowFormatters.duration(session.duration)) • \(session.completedExerciseCount) exercises • \(session.completedSetCount) sets")
+            Text("\(GymFlowFormatters.duration(session.duration)) • \(totals.exerciseCount) exercises • \(totals.setCount) sets")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Text("\(GymFlowFormatters.weight(session.trainingVolume)) kg volume")
+            Text("\(GymFlowFormatters.weight(totals.volume)) kg volume")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

@@ -122,21 +122,13 @@ enum ExerciseLibraryService {
         plans: [WorkoutPlan],
         sessions: [WorkoutSession]
     ) -> Bool {
-        let normalizedDefinitionName = normalizedName(definition.name)
+        let identity = ExerciseIdentity(definition)
         let isUsedByPlan = plans.contains { plan in
-            plan.exercises.contains { exercise in
-                exercise.exerciseID == definition.id
-                    || (exercise.exerciseID == nil
-                        && normalizedName(exercise.exerciseNameSnapshot) == normalizedDefinitionName)
-            }
+            plan.exercises.contains(where: identity.matches)
         }
         guard !isUsedByPlan else { return true }
         return sessions.contains { session in
-            session.exerciseRecords.contains { record in
-                record.exerciseID == definition.id
-                    || (record.exerciseID == nil
-                        && normalizedName(record.exerciseNameSnapshot) == normalizedDefinitionName)
-            }
+            session.exerciseRecords.contains(where: identity.matches)
         }
     }
 

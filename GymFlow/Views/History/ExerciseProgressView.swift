@@ -36,7 +36,7 @@ struct ExerciseProgressView: View {
                         Text(item.session.startedAt, format: .dateTime.month(.abbreviated).day().year())
                             .font(.headline)
                         Text(item.record.orderedSets.filter(\.isCompleted).map {
-                            "\(GymFlowFormatters.weight($0.weight)) kg × \($0.repetitions)"
+                            GymFlowFormatters.set(weight: $0.weight, repetitions: $0.repetitions)
                         }.joined(separator: "  •  "))
                         .font(.caption)
                         .foregroundStyle(.secondary)

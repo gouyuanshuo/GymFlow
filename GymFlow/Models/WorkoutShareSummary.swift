@@ -104,7 +104,8 @@ enum WorkoutShareSummaryBuilder {
         guard let completedAt = session.completedAt else {
             throw WorkoutShareError.missingCompletionDate
         }
-        guard !session.completedSets.isEmpty else {
+        let totals = session.totals
+        guard totals.setCount > 0 else {
             throw WorkoutShareError.noCompletedSets
         }
 
@@ -112,10 +113,10 @@ enum WorkoutShareSummaryBuilder {
             workoutName: normalizedWorkoutName(session.planNameSnapshot),
             date: session.startedAt,
             duration: max(0, completedAt.timeIntervalSince(session.startedAt)),
-            exerciseCount: session.completedExerciseCount,
-            setCount: session.completedSetCount,
-            repetitionCount: session.totalRepetitions,
-            trainingVolume: session.trainingVolume,
+            exerciseCount: totals.exerciseCount,
+            setCount: totals.setCount,
+            repetitionCount: totals.repetitions,
+            trainingVolume: totals.volume,
             exerciseHighlights: highlights(from: session.orderedExerciseRecords),
             personalBestHighlight: personalBestHighlight(
                 for: session,
@@ -241,16 +242,20 @@ enum WorkoutShareFormatters {
     }
 
     static func set(weight: Double, repetitions: Int) -> String {
-        if weight > 0 {
-            return "\(GymFlowFormatters.weight(weight)) kg × \(max(0, repetitions))"
-        }
-        return "\(max(0, repetitions)) reps"
+        GymFlowFormatters.set(weight: weight, repetitions: repetitions)
     }
 
+    /// Renders a number for the share card: whole above 100 or when it is already whole, otherwise
+    /// to one decimal place.
+    ///
+    /// Uses `FormatStyle` rather than `String(format:)` so the digits follow the reader's locale,
+    /// which matters on a card that is meant to be shared.
     private static func compactNumber(_ value: Double) -> String {
-        if value >= 100 || value.rounded() == value {
-            return String(format: "%.0f", value)
-        }
-        return String(format: "%.1f", value)
+        let usesWholeNumber = value >= 100 || value.rounded() == value
+        return value.formatted(
+            .number
+                .precision(.fractionLength(usesWholeNumber ? 0 : 1))
+                .grouping(.never)
+        )
     }
 }

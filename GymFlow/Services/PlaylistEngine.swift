@@ -53,12 +53,17 @@ enum PlaylistEngine {
         return [currentTrackID] + shuffler(unique.filter { $0 != currentTrackID })
     }
 
+    /// The index to play after `current`.
+    ///
+    /// Returns `nil` only when playback should stop: that is when the queue runs out during
+    /// automatic advancement and repeat is not `.all`. A manual "Next" tap always wraps, so
+    /// the button is never a silent no-op on the last track.
     static func nextIndex(current: Int, count: Int, repeatMode: RepeatMode, automatic: Bool) -> Int? {
         guard count > 0, current >= 0, current < count else { return nil }
         if automatic && repeatMode == .one { return current }
         let candidate = current + 1
         if candidate < count { return candidate }
-        return repeatMode == .all ? 0 : nil
+        return repeatMode == .all || !automatic ? 0 : nil
     }
 
     static func previousIndex(current: Int, count: Int) -> Int? {

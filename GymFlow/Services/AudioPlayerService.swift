@@ -26,7 +26,18 @@ final class AudioPlayerService: NSObject, ObservableObject, AVAudioPlayerDelegat
     private let persistenceKey = "audioPlayer.playbackSnapshot"
     private var wasPlayingBeforeInterruption = false
     private var volumeBeforeAlertDuck: Float?
+    private var alertDuckRestoreTask: Task<Void, Never>?
+    private var lastSnapshotPersistedAt = Date.distantPast
     private var remoteCommandTargets: [(command: MPRemoteCommand, token: Any)] = []
+
+    /// Volume the music ducks to while a rest-timer alert plays.
+    private static let alertDuckVolume: Float = 0.22
+    private static let alertDuckFadeDuration: TimeInterval = 0.10
+    private static let alertRestoreFadeDuration: TimeInterval = 0.16
+    /// How often the resume snapshot is written while a track plays. The progress timer ticks far
+    /// more often than this; persisting every tick would encode and write to disk thousands of
+    /// times per workout for a value that only needs coarse accuracy on resume.
+    private static let snapshotPersistenceInterval: TimeInterval = 5
 
     override convenience init() {
         self.init(defaults: .standard)
@@ -101,8 +112,23 @@ final class AudioPlayerService: NSObject, ObservableObject, AVAudioPlayerDelegat
         load(selected, autoplay: autoplay, startingAt: 0)
     }
 
-    func setPlaylist(_ tracks: [ImportedTrack]) {
-        setQueue(tracks, name: "Music Library", shuffled: false)
+    /// Applies a new library ordering without disturbing playback.
+    ///
+    /// Reordering rows in the library is a presentation change, so it must not stop the current
+    /// track, rename the queue, or reset shuffle. Only an unshuffled queue follows the new order;
+    /// a shuffled queue keeps its own sequence.
+    func updateLibraryOrder(_ tracks: [ImportedTrack]) {
+        let ordered = uniqueTracks(tracks)
+        let orderedIDs = Set(ordered.map(\.id))
+        guard Set(sourceTracks.map(\.id)) == orderedIDs else { return }
+
+        sourceTracks = ordered
+        guard !shuffleEnabled else {
+            persistSnapshot()
+            return
+        }
+        playlist = ordered
+        persistSnapshot()
     }
 
     func play(_ track: ImportedTrack) {
@@ -191,16 +217,28 @@ final class AudioPlayerService: NSObject, ObservableObject, AVAudioPlayerDelegat
 
     func beginTemporaryAlertDuck() {
         guard let player, player.isPlaying else { return }
+        // Capture the pre-duck volume only once per duck cycle. A second alert arriving while the
+        // previous restore fade is still running would otherwise record the interpolated mid-fade
+        // level as the "original", permanently lowering the user's music.
         if volumeBeforeAlertDuck == nil {
             volumeBeforeAlertDuck = player.volume
         }
-        player.setVolume(0.22, fadeDuration: 0.10)
+        alertDuckRestoreTask?.cancel()
+        alertDuckRestoreTask = nil
+        player.setVolume(Self.alertDuckVolume, fadeDuration: Self.alertDuckFadeDuration)
     }
 
     func endTemporaryAlertDuck() {
         guard let volume = volumeBeforeAlertDuck else { return }
-        player?.setVolume(volume, fadeDuration: 0.16)
-        volumeBeforeAlertDuck = nil
+        player?.setVolume(volume, fadeDuration: Self.alertRestoreFadeDuration)
+        // Hold the captured volume until the fade actually lands, so an overlapping duck restores
+        // to the true original rather than to a value sampled mid-fade.
+        alertDuckRestoreTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.alertRestoreFadeDuration))
+            guard !Task.isCancelled else { return }
+            self?.volumeBeforeAlertDuck = nil
+            self?.alertDuckRestoreTask = nil
+        }
     }
 
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
@@ -300,6 +338,20 @@ final class AudioPlayerService: NSObject, ObservableObject, AVAudioPlayerDelegat
         duration = player.duration
         isPlaying = player.isPlaying
         updateNowPlayingInfo()
+        persistSnapshotThrottled()
+    }
+
+    /// Writes the resume snapshot at most once per `snapshotPersistenceInterval`.
+    ///
+    /// Only `progress` changes between progress-timer ticks, and a resume position is useful at
+    /// coarse accuracy, so the encode-and-write does not need to run on every tick. Discrete
+    /// events (seek, pause, track change) still call `persistSnapshot()` directly.
+    private func persistSnapshotThrottled() {
+        let now = Date()
+        guard now.timeIntervalSince(lastSnapshotPersistedAt) >= Self.snapshotPersistenceInterval else {
+            return
+        }
+        lastSnapshotPersistedAt = now
         persistSnapshot()
     }
 
@@ -330,6 +382,7 @@ final class AudioPlayerService: NSObject, ObservableObject, AVAudioPlayerDelegat
             shuffleEnabled: shuffleEnabled,
             repeatMode: repeatMode
         )
+        lastSnapshotPersistedAt = Date()
         if let data = try? JSONEncoder().encode(snapshot) {
             defaults.set(data, forKey: persistenceKey)
         }

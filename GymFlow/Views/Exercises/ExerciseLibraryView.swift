@@ -74,14 +74,7 @@ struct ExerciseLibraryView: View {
             }
             .interactiveDismissDisabled()
         }
-        .alert("Exercise Library Error", isPresented: Binding(
-            get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(errorMessage ?? "An unknown error occurred.")
-        }
+        .errorAlert("Exercise Library Error", message: $errorMessage)
     }
 
     private var filterMenu: some View {

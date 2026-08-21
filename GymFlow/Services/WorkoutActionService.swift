@@ -127,14 +127,15 @@ enum WorkoutActionService {
             return
         }
 
+        // After finishing an exercise, move forward rather than back to an earlier unfinished one,
+        // so skipped sets do not pull the user backwards through the workout.
         if let completedExerciseIndex {
-            let followingIndices = Array(exercises.indices.dropFirst(completedExerciseIndex + 1))
-            if let index = followingIndices.first(where: {
-                exercises[$0].orderedSets.contains(where: { !$0.isCompleted })
-            }), let set = exercises[index].orderedSets.first(where: { !$0.isCompleted }) {
-                session.currentExerciseIndex = index
-                session.currentSetNumber = set.setNumber
-                return
+            for index in exercises.indices.dropFirst(completedExerciseIndex + 1) {
+                if let set = exercises[index].firstIncompleteSet {
+                    session.currentExerciseIndex = index
+                    session.currentSetNumber = set.setNumber
+                    return
+                }
             }
         }
 
@@ -144,14 +145,7 @@ enum WorkoutActionService {
             return
         }
 
-        if let index = exercises.firstIndex(where: {
-            $0.orderedSets.contains(where: { !$0.isCompleted })
-        }), let set = exercises[index].orderedSets.first(where: { !$0.isCompleted }) {
-            session.currentExerciseIndex = index
-            session.currentSetNumber = set.setNumber
-            return
-        }
-
+        // Everything is logged: park on the last set so the screen shows the end of the workout.
         let finalIndex = exercises.index(before: exercises.endIndex)
         session.currentExerciseIndex = finalIndex
         session.currentSetNumber = exercises[finalIndex].orderedSets.last?.setNumber
@@ -166,19 +160,13 @@ enum WorkoutActionService {
         if let savedIndex = session.currentExerciseIndex,
            exercises.indices.contains(savedIndex) {
             let exercise = exercises[savedIndex]
-            if let savedNumber = session.currentSetNumber,
-               let set = exercise.orderedSets.first(where: {
-                   $0.setNumber == savedNumber && !$0.isCompleted
-               }) {
-                return (savedIndex, exercise, set)
-            }
-            if let set = exercise.orderedSets.first(where: { !$0.isCompleted }) {
+            if let set = exercise.currentSet(preferring: session.currentSetNumber) {
                 return (savedIndex, exercise, set)
             }
         }
 
         for (index, exercise) in exercises.enumerated() {
-            if let set = exercise.orderedSets.first(where: { !$0.isCompleted }) {
+            if let set = exercise.firstIncompleteSet {
                 return (index, exercise, set)
             }
         }

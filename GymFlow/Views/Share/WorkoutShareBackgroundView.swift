@@ -241,7 +241,7 @@ struct WorkoutShareBackgroundView: View {
 
     @ViewBuilder
     private var legibilityOverlay: some View {
-        if background == .arctic {
+        if background.isLight {
             LinearGradient(
                 colors: [Color.white.opacity(0.04), Color.white.opacity(0.26)],
                 startPoint: .top,

@@ -16,7 +16,11 @@ enum PlaylistError: LocalizedError, Equatable {
 
 @MainActor
 enum PlaylistService {
-    static func validatedName(_ name: String, excluding playlistID: UUID? = nil, playlists: [Playlist]) throws -> String {
+    static func validatedName(
+        _ name: String,
+        excluding playlistID: UUID? = nil,
+        playlists: [Playlist]
+    ) throws -> String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw PlaylistError.emptyName }
         guard !playlists.contains(where: {
@@ -26,7 +30,12 @@ enum PlaylistService {
     }
 
     @discardableResult
-    static func create(name: String, playlists: [Playlist], context: ModelContext, now: Date = Date()) throws -> Playlist {
+    static func create(
+        name: String,
+        playlists: [Playlist],
+        context: ModelContext,
+        now: Date = Date()
+    ) throws -> Playlist {
         let validated = try validatedName(name, playlists: playlists)
         let playlist = Playlist(
             name: validated,
@@ -39,7 +48,13 @@ enum PlaylistService {
         return playlist
     }
 
-    static func rename(_ playlist: Playlist, to name: String, playlists: [Playlist], context: ModelContext, now: Date = Date()) throws {
+    static func rename(
+        _ playlist: Playlist,
+        to name: String,
+        playlists: [Playlist],
+        context: ModelContext,
+        now: Date = Date()
+    ) throws {
         playlist.name = try validatedName(name, excluding: playlist.id, playlists: playlists)
         playlist.updatedAt = now
         try context.save()
@@ -55,7 +70,9 @@ enum PlaylistService {
     ) throws -> Playlist {
         var candidate = "\(playlist.name) Copy"
         var suffix = 2
-        while playlists.contains(where: { $0.name.localizedCaseInsensitiveCompare(candidate) == .orderedSame }) {
+        while playlists.contains(where: {
+            $0.name.localizedCaseInsensitiveCompare(candidate) == .orderedSame
+        }) {
             candidate = "\(playlist.name) Copy \(suffix)"
             suffix += 1
         }
@@ -94,8 +111,9 @@ enum PlaylistService {
         context: ModelContext,
         now: Date = Date()
     ) throws {
-        let existing = Set(memberships.filter { $0.playlistID == playlist.id }.map(\.trackID))
-        var nextOrder = (memberships.filter { $0.playlistID == playlist.id }.map(\.sortOrder).max() ?? -1) + 1
+        let current = memberships.filter { $0.playlistID == playlist.id }
+        let existing = Set(current.map(\.trackID))
+        var nextOrder = (current.map(\.sortOrder).max() ?? -1) + 1
         for trackID in trackIDs where !existing.contains(trackID) {
             context.insert(PlaylistTrack(
                 playlistID: playlist.id,
@@ -109,7 +127,12 @@ enum PlaylistService {
         try context.save()
     }
 
-    static func remove(_ membership: PlaylistTrack, from playlist: Playlist, context: ModelContext, now: Date = Date()) throws {
+    static func remove(
+        _ membership: PlaylistTrack,
+        from playlist: Playlist,
+        context: ModelContext,
+        now: Date = Date()
+    ) throws {
         context.delete(membership)
         playlist.updatedAt = now
         try context.save()
@@ -130,14 +153,24 @@ enum PlaylistService {
         try context.save()
     }
 
-    static func orderedMemberships(for playlistID: UUID, memberships: [PlaylistTrack]) -> [PlaylistTrack] {
+    /// A playlist's entries in playback order, ties broken by when the track was added.
+    static func orderedMemberships(
+        for playlistID: UUID,
+        memberships: [PlaylistTrack]
+    ) -> [PlaylistTrack] {
         memberships.filter { $0.playlistID == playlistID }.sorted {
             $0.sortOrder == $1.sortOrder ? $0.addedAt < $1.addedAt : $0.sortOrder < $1.sortOrder
         }
     }
 
-    static func orderedTracks(for playlistID: UUID, memberships: [PlaylistTrack], tracks: [ImportedTrack]) -> [ImportedTrack] {
-        let tracksByID = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) })
-        return orderedMemberships(for: playlistID, memberships: memberships).compactMap { tracksByID[$0.trackID] }
+    /// A playlist's tracks in playback order, skipping entries whose track no longer exists.
+    static func orderedTracks(
+        for playlistID: UUID,
+        memberships: [PlaylistTrack],
+        tracks: [ImportedTrack]
+    ) -> [ImportedTrack] {
+        let tracksByID = Dictionary(tracks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return orderedMemberships(for: playlistID, memberships: memberships)
+            .compactMap { tracksByID[$0.trackID] }
     }
 }

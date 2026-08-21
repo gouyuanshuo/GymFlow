@@ -7,7 +7,7 @@ struct ContentView: View {
     @EnvironmentObject private var audioPlayer: AudioPlayerService
     @Query(sort: \ImportedTrack.sortOrder) private var tracks: [ImportedTrack]
     @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
-    @AppStorage("activeWorkoutSessionID") private var activeWorkoutSessionID = ""
+    @AppStorage(PreferenceKey.activeWorkoutSessionID) private var activeWorkoutSessionID = ""
     @State private var selectedTab: AppTab = .today
     @State private var isWorkoutPresented = false
     @State private var nowPlayingPresentation = NowPlayingPresentationState()
@@ -31,14 +31,7 @@ struct ContentView: View {
                     reconcileWorkoutActivities()
                 }
             }
-            .alert("Couldn’t Prepare GymFlow", isPresented: Binding(
-                get: { seedingError != nil },
-                set: { if !$0 { seedingError = nil } }
-            )) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text(seedingError ?? "An unknown data error occurred.")
-            }
+            .errorAlert("Couldn’t Prepare GymFlow", message: $seedingError)
     }
 
     @ViewBuilder

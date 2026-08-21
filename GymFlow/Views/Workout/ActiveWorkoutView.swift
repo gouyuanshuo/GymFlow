@@ -7,10 +7,17 @@ struct ActiveWorkoutView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var audioPlayer: AudioPlayerService
-    @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var allSessions: [WorkoutSession]
-    @AppStorage("hapticFeedbackEnabled") private var hapticsEnabled = true
-    @AppStorage("timerSoundEnabled") private var timerSoundEnabled = true
-    @AppStorage("activeWorkoutSessionID") private var activeWorkoutSessionID = ""
+    /// Only completed sessions can supply a previous performance, so the store filters them rather
+    /// than handing the view every session ever recorded.
+    @Query(
+        filter: WorkoutSession.predicate(status: .completed),
+        sort: \WorkoutSession.startedAt,
+        order: .reverse
+    )
+    private var completedSessions: [WorkoutSession]
+    @AppStorage(PreferenceKey.hapticFeedbackEnabled) private var hapticsEnabled = true
+    @AppStorage(PreferenceKey.timerSoundEnabled) private var timerSoundEnabled = true
+    @AppStorage(PreferenceKey.activeWorkoutSessionID) private var activeWorkoutSessionID = ""
     let session: WorkoutSession
     @StateObject private var restTimer: RestTimerService
     @State private var exerciseIndex = 0
@@ -20,12 +27,14 @@ struct ActiveWorkoutView: View {
     @State private var nowPlayingPresentation = NowPlayingPresentationState()
     @State private var notesExpanded = false
     @State private var errorMessage: String?
+    /// Cached sets from the last time this exercise was trained. See `refreshPreviousPerformance()`.
+    @State private var previousPerformanceSets: [WorkoutSetRecord] = []
     private let liveActivity = LiveActivityManager.shared
 
     init(session: WorkoutSession) {
         self.session = session
         _restTimer = StateObject(wrappedValue: RestTimerService(
-            keyPrefix: "restTimer.\(session.id.uuidString)",
+            keyPrefix: RestTimerStorage.keyPrefix(for: session.id),
             migrationKeyPrefix: "restTimer",
             sessionID: session.id,
             notificationScheduler: RestTimerNotificationScheduler.shared
@@ -37,21 +46,18 @@ struct ActiveWorkoutView: View {
         guard exercises.indices.contains(exerciseIndex) else { return nil }
         return exercises[exerciseIndex]
     }
+    /// The set number shown in the header.
+    ///
+    /// Once the exercise on screen is finished there is no set left to work on, so the header keeps
+    /// showing its last set rather than blanking out.
     private var currentSetNumber: Int {
-        let savedSet = session.currentSetNumber.flatMap { savedNumber in
-            currentExercise?.orderedSets.first(where: {
-                $0.setNumber == savedNumber && !$0.isCompleted
-            })
-        }
-        return savedSet?.setNumber
-            ?? currentExercise?.orderedSets.first(where: { !$0.isCompleted })?.setNumber
-            ?? currentExercise?.orderedSets.last?.setNumber
+        guard let currentExercise else { return 1 }
+        return currentExercise.currentSet(preferring: session.currentSetNumber)?.setNumber
+            ?? currentExercise.orderedSets.last?.setNumber
             ?? 1
     }
     private var allExercisesAreComplete: Bool {
-        !exercises.isEmpty && exercises.allSatisfy { exercise in
-            !exercise.orderedSets.isEmpty && exercise.orderedSets.allSatisfy(\.isCompleted)
-        }
+        !exercises.isEmpty && exercises.allSatisfy(\.isFullyCompleted)
     }
 
     var body: some View {
@@ -69,7 +75,7 @@ struct ActiveWorkoutView: View {
                             workoutStartDate: session.startedAt
                         )
 
-                        previousPerformance(exercise)
+                        previousPerformance
                         setCards(exercise)
 
                         if restTimer.isRunning || restTimer.isPaused || restTimer.didComplete {
@@ -130,9 +136,7 @@ struct ActiveWorkoutView: View {
                 Button("Finish Workout") { finishWorkout() }
                 Button("Keep Working Out", role: .cancel) { }
             } message: { Text("You can review the summary before returning to Today.") }
-            .alert("Workout Error", isPresented: Binding(
-                get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
-            )) { Button("OK", role: .cancel) { } } message: { Text(errorMessage ?? "Unknown error") }
+            .errorAlert("Workout Error", message: $errorMessage)
             .fullScreenCover(isPresented: $summaryPresented, onDismiss: { dismiss() }) {
                 WorkoutCompletionView(session: session) {
                     summaryPresented = false
@@ -147,7 +151,10 @@ struct ActiveWorkoutView: View {
                 RestTimerNotificationScheduler.shared.prepareAuthorization()
                 restTimer.refresh()
                 syncLiveActivity()
+                refreshPreviousPerformance()
             }
+            .onChange(of: exerciseIndex) { _, _ in refreshPreviousPerformance() }
+            .onChange(of: completedSessions.count) { _, _ in refreshPreviousPerformance() }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     restTimer.reload()
@@ -173,12 +180,9 @@ struct ActiveWorkoutView: View {
     }
 
     @ViewBuilder
-    private func previousPerformance(_ exercise: ExerciseRecord) -> some View {
-        if let previous = previousRecord(for: exercise) {
-            let completedSets = previous.orderedSets.filter(\.isCompleted)
-            if !completedSets.isEmpty {
-                PreviousPerformanceCard(sets: completedSets)
-            }
+    private var previousPerformance: some View {
+        if !previousPerformanceSets.isEmpty {
+            PreviousPerformanceCard(sets: previousPerformanceSets)
         }
     }
 
@@ -207,15 +211,16 @@ struct ActiveWorkoutView: View {
 
     @ViewBuilder
     private func notesCard(_ exercise: ExerciseRecord) -> some View {
+        // `@Bindable` gives the SwiftData model a binding directly, so the notes field does not need
+        // a hand-written `Binding(get:set:)`; the save side effect moves to `onChange`.
+        @Bindable var exercise = exercise
         DisclosureGroup(isExpanded: $notesExpanded) {
-            TextEditor(text: Binding(
-                get: { exercise.notes },
-                set: { exercise.notes = $0; saveImmediately() }
-            ))
-            .frame(minHeight: 88)
-            .scrollContentBackground(.hidden)
-            .padding(.top, 8)
-            .accessibilityLabel("Exercise notes")
+            TextEditor(text: $exercise.notes)
+                .frame(minHeight: 88)
+                .scrollContentBackground(.hidden)
+                .padding(.top, 8)
+                .onChange(of: exercise.notes) { _, _ in saveImmediately() }
+                .accessibilityLabel("Exercise notes")
         } label: {
             Label("Exercise Notes", systemImage: "note.text")
                 .font(.headline)
@@ -244,15 +249,29 @@ struct ActiveWorkoutView: View {
         }
     }
 
-    private func previousRecord(for exercise: ExerciseRecord) -> ExerciseRecord? {
-        allSessions.first(where: { candidate in
-            candidate.id != session.id && candidate.status == .completed
-                && candidate.orderedExerciseRecords.contains(where: {
-                    $0.exerciseNameSnapshot == exercise.exerciseNameSnapshot
-                })
-        })?.orderedExerciseRecords.first(where: {
-            $0.exerciseNameSnapshot == exercise.exerciseNameSnapshot
-        })
+    /// Finds the sets logged for `exerciseName` in the most recent other completed session.
+    ///
+    /// `completedSessions` is newest-first, so the first match is the most recent one.
+    private func previousCompletedSets(forExerciseNamed exerciseName: String) -> [WorkoutSetRecord] {
+        for candidate in completedSessions where candidate.id != session.id {
+            guard let record = candidate.orderedExerciseRecords.first(where: {
+                $0.exerciseNameSnapshot == exerciseName
+            }) else { continue }
+            return record.orderedSets.filter(\.isCompleted)
+        }
+        return []
+    }
+
+    /// Refreshes the cached previous performance for the exercise on screen.
+    ///
+    /// The lookup walks past sessions and their sets, so it runs only when the exercise or the
+    /// history changes — not on every `body` pass, which the rest timer triggers each second.
+    private func refreshPreviousPerformance() {
+        guard let name = currentExercise?.exerciseNameSnapshot else {
+            previousPerformanceSets = []
+            return
+        }
+        previousPerformanceSets = previousCompletedSets(forExerciseNamed: name)
     }
 
     private func toggleCompletion(_ set: WorkoutSetRecord) {
