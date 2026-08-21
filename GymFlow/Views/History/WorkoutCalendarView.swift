@@ -6,11 +6,22 @@ struct WorkoutCalendarView: View {
     @State private var displayedMonth = WorkoutHistoryGrouper.startOfMonth(containing: Date())
     @State private var selection: CalendarDaySelection?
 
-    private var calendar: Calendar {
+    /// A Monday-first calendar, built once per view rather than on every read.
+    ///
+    /// Drawing one month asks the calendar for a day boundary and a "is this today?" answer per
+    /// cell, so deriving it from `Calendar.current` on each access rebuilt it dozens of times per
+    /// render. Stored per view rather than statically so a locale or time-zone change still takes
+    /// effect the next time the calendar is drawn.
+    private let calendar: Calendar = {
         var value = Calendar.current
         value.firstWeekday = 2
         return value
-    }
+    }()
+
+    private static let gridColumns = Array(
+        repeating: GridItem(.flexible(), spacing: 4),
+        count: 7
+    )
 
     /// Only the displayed month is on screen, so the grid and summary are derived from that month
     /// alone rather than from every session ever recorded.
@@ -78,7 +89,7 @@ struct WorkoutCalendarView: View {
     }
 
     private var weekdayHeader: some View {
-        LazyVGrid(columns: gridColumns, spacing: 8) {
+        LazyVGrid(columns: Self.gridColumns, spacing: 8) {
             ForEach(Array(weekdaySymbols.enumerated()), id: \.offset) { _, symbol in
                 Text(symbol)
                     .font(.caption.weight(.semibold))
@@ -90,7 +101,7 @@ struct WorkoutCalendarView: View {
     }
 
     private func monthGrid(sessionsByDay: [Date: [WorkoutSession]]) -> some View {
-        LazyVGrid(columns: gridColumns, spacing: 8) {
+        LazyVGrid(columns: Self.gridColumns, spacing: 8) {
             ForEach(Array(monthDates.enumerated()), id: \.offset) { _, date in
                 if let date {
                     let day = calendar.startOfDay(for: date)
@@ -110,10 +121,6 @@ struct WorkoutCalendarView: View {
                 }
             }
         }
-    }
-
-    private var gridColumns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
     }
 
     private var monthDates: [Date?] {

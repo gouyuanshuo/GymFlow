@@ -95,11 +95,13 @@ enum PlaylistService {
         assignedPlans: [WorkoutPlan] = [],
         context: ModelContext
     ) throws {
-        assignedPlans.filter { $0.assignedPlaylistID == playlist.id }.forEach {
-            $0.assignedPlaylistID = nil
-            $0.updatedAt = Date()
+        for plan in assignedPlans where plan.assignedPlaylistID == playlist.id {
+            plan.assignedPlaylistID = nil
+            plan.updatedAt = Date()
         }
-        memberships.filter { $0.playlistID == playlist.id }.forEach(context.delete)
+        for membership in memberships where membership.playlistID == playlist.id {
+            context.delete(membership)
+        }
         context.delete(playlist)
         try context.save()
     }

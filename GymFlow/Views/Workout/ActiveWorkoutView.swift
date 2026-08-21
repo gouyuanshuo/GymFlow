@@ -65,18 +65,22 @@ struct ActiveWorkoutView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if let exercise = currentExercise {
+                        // Sorted once per pass. `orderedSets` re-sorts the stored relationship on
+                        // every read, and the rest timer redraws this screen each second.
+                        let sets = exercise.orderedSets
+
                         WorkoutExerciseHeader(
                             exerciseName: exercise.exerciseNameSnapshot,
                             exerciseNumber: min(exerciseIndex + 1, max(1, exercises.count)),
                             exerciseCount: exercises.count,
                             currentSetNumber: currentSetNumber,
-                            setCount: exercise.orderedSets.count,
-                            completedSetCount: exercise.orderedSets.filter(\.isCompleted).count,
+                            setCount: sets.count,
+                            completedSetCount: sets.lazy.filter(\.isCompleted).count,
                             workoutStartDate: session.startedAt
                         )
 
                         previousPerformance
-                        setCards(exercise)
+                        setCards(exercise, sets: sets)
 
                         if restTimer.isRunning || restTimer.isPaused || restTimer.didComplete {
                             RestTimerCard(timer: restTimer)
@@ -187,12 +191,12 @@ struct ActiveWorkoutView: View {
     }
 
     @ViewBuilder
-    private func setCards(_ exercise: ExerciseRecord) -> some View {
+    private func setCards(_ exercise: ExerciseRecord, sets: [WorkoutSetRecord]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            ForEach(exercise.orderedSets) { set in
+            ForEach(sets) { set in
                 WorkoutSetCard(
                     set: set,
-                    canRemove: exercise.orderedSets.count > 1,
+                    canRemove: sets.count > 1,
                     onChange: { _ = saveImmediately() },
                     onToggleCompletion: { toggleCompletion(set) },
                     onRemove: { removeSet(set, from: exercise) }
@@ -249,15 +253,25 @@ struct ActiveWorkoutView: View {
         }
     }
 
-    /// Finds the sets logged for `exerciseName` in the most recent other completed session.
+    /// Finds the sets logged for `exercise` the last time it was actually trained.
     ///
-    /// `completedSessions` is newest-first, so the first match is the most recent one.
-    private func previousCompletedSets(forExerciseNamed exerciseName: String) -> [WorkoutSetRecord] {
+    /// Matched through ``ExerciseIdentity`` rather than by raw name, so a library exercise that
+    /// was renamed still finds its own history and a snapshot differing only in case, spacing, or
+    /// accents still counts as the same exercise — the rule the Personal Best screens already use.
+    ///
+    /// `completedSessions` is newest-first, so the first session with logged sets is the most
+    /// recent one. Sessions where the exercise was opened but nothing was completed are skipped:
+    /// they are not a previous performance to compare against.
+    private func previousCompletedSets(matching exercise: ExerciseRecord) -> [WorkoutSetRecord] {
+        let identity = ExerciseIdentity(
+            id: exercise.exerciseID,
+            name: exercise.exerciseNameSnapshot
+        )
         for candidate in completedSessions where candidate.id != session.id {
-            guard let record = candidate.orderedExerciseRecords.first(where: {
-                $0.exerciseNameSnapshot == exerciseName
-            }) else { continue }
-            return record.orderedSets.filter(\.isCompleted)
+            guard let record = candidate.orderedExerciseRecords.first(where: identity.matches)
+            else { continue }
+            let completedSets = record.orderedSets.filter(\.isCompleted)
+            if !completedSets.isEmpty { return completedSets }
         }
         return []
     }
@@ -267,11 +281,11 @@ struct ActiveWorkoutView: View {
     /// The lookup walks past sessions and their sets, so it runs only when the exercise or the
     /// history changes — not on every `body` pass, which the rest timer triggers each second.
     private func refreshPreviousPerformance() {
-        guard let name = currentExercise?.exerciseNameSnapshot else {
+        guard let currentExercise else {
             previousPerformanceSets = []
             return
         }
-        previousPerformanceSets = previousCompletedSets(forExerciseNamed: name)
+        previousPerformanceSets = previousCompletedSets(matching: currentExercise)
     }
 
     private func toggleCompletion(_ set: WorkoutSetRecord) {

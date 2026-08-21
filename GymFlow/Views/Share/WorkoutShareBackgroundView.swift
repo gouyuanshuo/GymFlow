@@ -188,11 +188,11 @@ struct WorkoutShareBackgroundView: View {
             Canvas { context, canvasSize in
                 let spacing = max(14, canvasSize.width / 12)
                 var path = Path()
-                stride(from: 0.0, through: canvasSize.width, by: spacing).forEach { x in
+                for x in stride(from: 0.0, through: canvasSize.width, by: spacing) {
                     path.move(to: CGPoint(x: x, y: 0))
                     path.addLine(to: CGPoint(x: x, y: canvasSize.height))
                 }
-                stride(from: 0.0, through: canvasSize.height, by: spacing).forEach { y in
+                for y in stride(from: 0.0, through: canvasSize.height, by: spacing) {
                     path.move(to: CGPoint(x: 0, y: y))
                     path.addLine(to: CGPoint(x: canvasSize.width, y: y))
                 }

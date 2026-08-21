@@ -3,20 +3,27 @@ import SwiftUI
 
 struct WorkoutCompletionView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var allSessions: [WorkoutSession]
+    /// Personal bests are judged against finished workouts only, so the store filters them here
+    /// instead of handing this screen every session ever recorded.
+    @Query(
+        filter: WorkoutSession.predicate(status: .completed),
+        sort: \WorkoutSession.startedAt,
+        order: .reverse
+    )
+    private var completedSessions: [WorkoutSession]
     /// `@Bindable` so the notes field binds straight to the model instead of through a
     /// hand-written `Binding(get:set:)`.
     @Bindable var session: WorkoutSession
     let onDone: () -> Void
     @State private var errorMessage: String?
     @State private var sharePresentation: WorkoutSharePresentation?
-
-    private var personalBestEvents: [ExercisePREvent] {
-        ExercisePerformanceService.personalBestEvents(in: session, sessions: allSessions)
-    }
+    /// Cached because the notes field below writes straight to the model, so every keystroke
+    /// re-runs `body`. Deriving the bests there would rescan the user's whole history per
+    /// character typed; the workout is finished, so the answer cannot change while this is on
+    /// screen.
+    @State private var personalBestEvents: [ExercisePREvent] = []
 
     var body: some View {
-        let newPersonalBestEvents = personalBestEvents
         // Read once: the four metric tiles below would otherwise each rescan every logged set.
         let totals = session.totals
         NavigationStack {
@@ -46,9 +53,9 @@ struct WorkoutCompletionView: View {
                         SummaryMetric(title: "Workout Playlist", value: playlistName, icon: "music.note.list")
                     }
 
-                    if !newPersonalBestEvents.isEmpty {
+                    if !personalBestEvents.isEmpty {
                         WorkoutPersonalBestCelebration(
-                            events: Array(newPersonalBestEvents.prefix(4))
+                            events: Array(personalBestEvents.prefix(4))
                         )
                     }
 
@@ -83,6 +90,12 @@ struct WorkoutCompletionView: View {
                 }
             }
             .errorAlert("Workout Error", message: $errorMessage)
+            .task {
+                personalBestEvents = ExercisePerformanceService.personalBestEvents(
+                    in: session,
+                    sessions: completedSessions
+                )
+            }
         }
     }
 
@@ -91,7 +104,7 @@ struct WorkoutCompletionView: View {
             sharePresentation = WorkoutSharePresentation(
                 summary: try WorkoutShareSummaryBuilder.build(
                     from: session,
-                    sessions: allSessions
+                    sessions: completedSessions
                 )
             )
         } catch {

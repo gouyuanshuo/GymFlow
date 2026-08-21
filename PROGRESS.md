@@ -1166,3 +1166,60 @@ xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -conf
 ```
 
 Result: exit 0, **CLEAN BUILD SUCCEEDED**.
+
+### 2026-08-21 — Performance review, refactor, and adopted code style
+
+Reviewed the whole app for performance and maintainability. Changes made:
+
+- `ExercisePerformanceService.personalBestEvents(in:sessions:)` rescanned the entire training
+  history once per exercise in the finished workout, so finishing a workout cost time proportional
+  to *exercises times sessions*. It now builds a `PerformanceHistory` index in a single pass and
+  looks each exercise up. The index is keyed both by exercise ID and by normalised name, because an
+  exercise logged before the library existed can only be matched by name; a lookup merges the two.
+- `ExercisePerformanceRecord` now stores `setVolume` and `estimatedOneRepMax` instead of recomputing
+  them, and `bestRecord(in:value:)` scores each record once instead of on every comparison.
+- `WorkoutCompletionView` recomputed every personal best inside `body`, which the bound notes editor
+  re-ran on each keystroke. The result is now cached in `@State` and computed once in `task`.
+- `HistoryView`, `WorkoutCompletionView`, and `WorkoutHistoryDetailView` no longer fetch every
+  session ever recorded. The first two filter to completed workouts in the store; the third dropped
+  its `@Query` entirely and fetches history only when the user asks to share.
+- `WorkoutCalendarView` rebuilt `Calendar.current` on every access, dozens of times per rendered
+  month. It is now stored once per view, and the grid columns are a static.
+- `ActiveWorkoutView` sorted the current exercise's sets four times per pass while the rest timer
+  redrew the screen each second; the sorted array is now read once and passed down.
+
+Correctness fix: `ActiveWorkoutView` matched previous performance by raw name equality, so a renamed
+library exercise — or a snapshot differing only in case, spacing, or accents — lost its history. It
+now matches through `ExerciseIdentity`, the same ID-first rule the Personal Best screens use, and
+skips past sessions where nothing was actually logged.
+
+Adopted Apple's `swift-format` as the project style, configured in `.swift-format` and documented in
+`AGENTS.md`. Fixed every semantic finding it reported (`.forEach` over for-in, `case let` placement,
+`Array<Date?>` shorthand); the pretty printer's whitespace opinions are left for a separate pass.
+
+Project configuration: the shared `GymFlow` scheme had an empty `TestAction`, so `xcodebuild test`
+failed with "not currently configured for the test action". `GymFlowTests` and `GymFlowUITests` were
+added to its `Testables`.
+
+Build command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/GymFlowDerivedData CODE_SIGNING_ALLOWED=NO build
+```
+
+Result: exit 0, **BUILD SUCCEEDED**.
+
+Unit-test command:
+
+```bash
+xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -destination 'platform=iOS Simulator,id=BE3E1DA1-5745-42DA-88B2-D3CAFF380FFF' -derivedDataPath /tmp/GymFlowDerivedData CODE_SIGNING_ALLOWED=NO -only-testing:GymFlowTests test
+```
+
+Result: exit 0, **TEST SUCCEEDED** — 100 tests in 5 suites. Two were added to cover the rebuilt
+history index: one checks that a legacy name-only session still counts as history for the same
+exercise, the other that a heavy lift on one exercise does not raise the bar for another.
+
+Known remaining issue: `RestTimerService.swift:46` warns that the main-actor-isolated
+`legacyKeyPrefix` is referenced from a nonisolated context. It predates this pass and will become an
+error under the Swift 6 language mode.
+

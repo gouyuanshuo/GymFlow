@@ -63,7 +63,7 @@ final class AudioPlayerService: NSObject, ObservableObject, AVAudioPlayerDelegat
     deinit {
         progressTimer?.invalidate()
         NotificationCenter.default.removeObserver(self)
-        remoteCommandTargets.forEach { $0.command.removeTarget($0.token) }
+        for target in remoteCommandTargets { target.command.removeTarget(target.token) }
     }
 
     func synchronizeLibrary(_ tracks: [ImportedTrack]) {

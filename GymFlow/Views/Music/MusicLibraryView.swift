@@ -203,9 +203,11 @@ struct MusicLibraryView: View {
             }
             try modelContext.save()
         } catch {
-            insertedTracks.forEach(modelContext.delete)
+            for track in insertedTracks { modelContext.delete(track) }
             if let activeStore {
-                copiedFileNames.forEach { try? activeStore.delete(storedFileName: $0) }
+                for fileName in copiedFileNames {
+                    try? activeStore.delete(storedFileName: fileName)
+                }
             }
             errorMessage = "The audio import did not finish. \(error.localizedDescription)"
         }

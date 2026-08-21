@@ -134,7 +134,7 @@ enum WorkoutHistoryGrouper {
         guard let days = calendar.range(of: .day, in: .month, for: monthStart) else { return [] }
         let weekday = calendar.component(.weekday, from: monthStart)
         let leadingEmptyDays = (weekday - calendar.firstWeekday + 7) % 7
-        var dates = Array<Date?>(repeating: nil, count: leadingEmptyDays)
+        var dates = [Date?](repeating: nil, count: leadingEmptyDays)
         dates.append(contentsOf: days.compactMap { day in
             calendar.date(byAdding: .day, value: day - 1, to: monthStart)
         })

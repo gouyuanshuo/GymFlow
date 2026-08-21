@@ -281,6 +281,47 @@ struct ExercisePerformanceServiceTests {
         #expect(bestRepetitions.repetitions == 12)
     }
 
+    @Test("A legacy name-only record still counts as history for the same exercise")
+    func legacyHistorySuppressesRepeatedPersonalBest() {
+        // Recorded before exercises carried IDs, so it can only be matched by name.
+        let legacyPrevious = makeSession(
+            day: 1,
+            usesLegacyExerciseIdentity: true,
+            name: "  BENCH   PRESS ",
+            sets: [set(100, 5)]
+        )
+        let current = makeSession(day: 2, sets: [set(90, 5)])
+
+        let events = ExercisePerformanceService.personalBestEvents(
+            in: current,
+            sessions: [legacyPrevious, current]
+        )
+
+        #expect(events.isEmpty)
+    }
+
+    @Test("Each exercise in a workout is judged against its own history")
+    func personalBestsDoNotLeakBetweenExercises() throws {
+        let otherExerciseID = UUID()
+        let previous = makeSession(
+            day: 1,
+            exerciseID: otherExerciseID,
+            name: "Overhead Press",
+            sets: [set(200, 5)]
+        )
+        let current = makeSession(day: 2, sets: [set(60, 5)])
+
+        let events = ExercisePerformanceService.personalBestEvents(
+            in: current,
+            sessions: [previous, current]
+        )
+
+        // The heavy Overhead Press history must not raise the bar for Bench Press.
+        let event = try #require(events.first)
+        #expect(event.record.exerciseName == "Bench Press")
+        #expect(event.record.weight == 60)
+    }
+
     private func makeSession(
         day: Int = 1,
         status: WorkoutSessionStatus = .completed,

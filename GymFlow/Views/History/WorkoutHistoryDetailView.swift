@@ -2,7 +2,7 @@ import SwiftData
 import SwiftUI
 
 struct WorkoutHistoryDetailView: View {
-    @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var allSessions: [WorkoutSession]
+    @Environment(\.modelContext) private var modelContext
     let session: WorkoutSession
     @State private var sharePresentation: WorkoutSharePresentation?
     @State private var errorMessage: String?
@@ -33,8 +33,11 @@ struct WorkoutHistoryDetailView: View {
             }
 
             ForEach(session.orderedExerciseRecords) { exercise in
+                // Sorted and filtered once: `orderedSets` re-sorts the relationship on each read,
+                // and both the rows and the empty-state check below need the same answer.
+                let completedSets = exercise.orderedSets.filter(\.isCompleted)
                 Section {
-                    ForEach(exercise.orderedSets.filter(\.isCompleted)) { set in
+                    ForEach(completedSets) { set in
                         HStack {
                             Text(set.isWarmup ? "Warm-up" : "Set \(set.setNumber)")
                             Spacer()
@@ -45,7 +48,7 @@ struct WorkoutHistoryDetailView: View {
                                 .monospacedDigit()
                         }
                     }
-                    if exercise.orderedSets.filter(\.isCompleted).isEmpty {
+                    if completedSets.isEmpty {
                         Text("No completed sets").foregroundStyle(.secondary)
                     }
                     NavigationLink("View Exercise Progress") {
@@ -68,12 +71,21 @@ struct WorkoutHistoryDetailView: View {
         .errorAlert("Couldn’t Share Workout", message: $errorMessage)
     }
 
+    /// Builds the share card, reading the history it needs at the moment the user asks for it.
+    ///
+    /// Fetched here rather than held in a `@Query`: the history is only needed to work out whether
+    /// this workout set a personal best, and a query would re-read every finished session each
+    /// time this screen redraws.
     private func prepareShare() {
         do {
+            let descriptor = FetchDescriptor<WorkoutSession>(
+                predicate: WorkoutSession.predicate(status: .completed),
+                sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
+            )
             sharePresentation = WorkoutSharePresentation(
                 summary: try WorkoutShareSummaryBuilder.build(
                     from: session,
-                    sessions: allSessions
+                    sessions: try modelContext.fetch(descriptor)
                 )
             )
         } catch {
