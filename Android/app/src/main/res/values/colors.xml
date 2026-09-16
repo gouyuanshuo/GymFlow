@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="gymflow_accent">#29C65B</color>
+    <color name="gymflow_dark">#0B0D10</color>
+    <color name="gymflow_light">#F5F7F6</color>
+</resources>

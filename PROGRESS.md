@@ -13,10 +13,55 @@
 - Completed: root-layout bug fix and defensive Live Activity lifecycle implementation with unit/UI verification.
 - Completed: deterministic first-tap plan routing, stable Now Playing presentation ownership, and history-based duration estimation with simulator and physical-iPhone verification.
 - Completed: Active Workout exercise-screen redesign with responsive set cards, compact reference/timer UI, safe-area player/navigation controls, and simulator plus physical-iPhone verification.
-- Current work: picker, Personal Best, PR, and share-poster implementation plus automated/device verification are complete.
-- Next action: perform the remaining hands-on physical picker/share/Exercise Detail gestures when Xcode UI automation or a human device pass is available, plus the existing Dynamic Island/alert-intensity checks.
+- Completed: native Simplified Chinese Android port covering plans, workouts, rest alerts, history/calendar, Personal Bests, local music/playlists, and workout-poster sharing on Android 8.0 or newer.
+- Current work: the signed Android APK is packaged and install-verified; the port is ready for delivery.
+- Next action: install the APK on the recipient Android phone and allow notifications if workout/rest controls are desired; separately, the iOS hands-on picker/share/Dynamic Island checks remain when a physical-device pass is available.
 
 ## Engineering log
+
+### 2026-09-02 — One-click Android launcher
+
+- Added the repository-root `启动 GymFlow Android.bat` launcher so normal local use no longer requires remembering SDK, ADB, AVD, package, activity, or APK commands.
+- The launcher validates the D-drive SDK, reuses an existing emulator or starts `GymFlow_Visual_API36`, waits up to 120 seconds for a complete boot, installs the signed distribution APK only when GymFlow is absent, and cold-launches `MainActivity`.
+- Corrected the initial Unix line endings to Windows CRLF and replaced `timeout` with a redirection-safe wait mechanism after command-line testing exposed both Windows batch edge cases.
+
+Verification: an end-to-end `cmd.exe /c` run detected the newly started emulator, waited for boot, found the retained GymFlow installation, and cold-launched `com.gouyuanshuo.gymflow/.MainActivity` with exit 0.
+
+### 2026-09-02 — Android toolchain relocation
+
+- Moved the 12.12 GB Android SDK, API 36 system images, AVD data, command-line tools, and standalone Gradle installation out of the project area from `D:\Playground\.android-build-tools` to the dedicated top-level `D:\Android` directory.
+- Updated the ignored Android `local.properties`, both AVD registrations, generated emulator path state, and Android build/run documentation to use `D:\Android\android-sdk` and `D:\Android\avd`.
+- Discarded only stale Quick Boot snapshots containing absolute old paths; AVD user data and the installed GymFlow app were preserved.
+- Copied the existing Gradle dependencies to `D:\Android\gradle-cache` and permanently set the current Windows user's `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `ANDROID_AVD_HOME`, and `GRADLE_USER_HOME` variables to the new D-drive locations. The old C-drive cache remains only as a rollback copy; the system JDK remains at `C:\Program Files\Java\jdk-24` because it predates this Android setup and may serve unrelated Java software.
+
+Verification: `emulator -list-avds` found both original AVDs; `testDebugUnitTest assembleDebug` completed 39 tasks with **BUILD SUCCESSFUL** using the D-drive SDK/cache; the visual API 36 AVD cold-booted from `D:\Android`, retained the installed GymFlow package and active workout data, cold-launched the Chinese `MainActivity`, produced no `AndroidRuntime` fatal log, and shut down cleanly.
+
+### 2026-08-31 — Native Chinese Android port implementation
+
+- Confirmed the requested Git branch `agent/flac-and-workout-set-ui` at commit `5eb0091` and used its current iOS behavior as the porting baseline.
+- Added a native Java/Android SQLite application under `Android/`, targeting API 36 with Android 8.0/API 26 minimum and no application runtime dependencies or network permissions.
+- Implemented Simplified Chinese Today, Plans, History, Music, and Settings screens; 38 seeded Chinese exercises; sample plans; safe plan editing; snapshot workouts; set logging; rest timing; ongoing notification actions; history/calendar; Personal Best calculations; local audio import/playlists/background playback; and 1179 × 2556 workout-poster sharing.
+- Installed the APK on Android 16/API 36 AOSP and standard phone emulators. Completed a workout set, observed the persisted 180-second rest deadline and cursor advance, confirmed the Chinese notification actions, finished the workout, observed the 480 kg summary and Bench Press weight PB, generated a private share PNG, opened the native chooser, reviewed History/Calendar/Plans/Exercise Library/Music/Settings, and confirmed an upgrade install preserved history.
+- Found Android 15/16 enforced edge-to-edge system bars during visual QA. Added system-bar inset handling to the main, activity, and poster-preview roots and rechecked the standard emulator screenshot; the title and five-tab navigation now remain outside system bars.
+- Generated a two-second PCM WAV, imported it through Android DocumentsUI, confirmed its app-private copy, started playback, and verified the MediaSession foreground notification exposes Chinese Previous/Pause/Next actions without `AndroidRuntime` or `MediaPlayer` errors.
+
+Incremental verification command:
+
+```powershell
+cd Android
+.\gradlew.bat testDebugUnitTest assembleDebug
+```
+
+Result: exit 0, **BUILD SUCCESSFUL**; all 39 Gradle tasks completed or were up to date, and the debug APK installed and cold-launched successfully.
+
+Final release verification:
+
+- `clean testDebugUnitTest assembleRelease` completed with exit 0; 68 Gradle tasks executed, release lint passed, and `BUILD SUCCESSFUL` was reported.
+- Aligned and signed `dist/GymFlow-Android-v1.0.0.apk` with a project-specific 3072-bit RSA certificate retained under the Git-ignored `.private/` directory for future compatible upgrades.
+- `zipalign -c -v 4` reported `Verification successful`; `apksigner verify --verbose --print-certs` verified APK Signature Scheme v2 and v3 with one signer.
+- `aapt dump badging` confirmed package `com.gouyuanshuo.gymflow`, version `1.0.0`/code 1, minimum API 26, target/compile API 36, label `GymFlow`, and only foreground-service, media-playback, notification, and vibration permissions.
+- Removed the differently signed debug copy from the test emulator, installed the exact final APK, cold-launched `MainActivity` successfully, confirmed the Simplified Chinese home hierarchy and safe-area bounds, confirmed release package flags omit `DEBUGGABLE`, and observed no `AndroidRuntime` fatal entry.
+- Final APK size: 1,049,971 bytes. SHA-256: `0619604240152E1DF2D15FECFD75AB20C95537DDDDA27FC90C25713D764114B9`.
 
 ### 2026-08-17 — Workout pickers, Personal Bests, and iPhone share poster audit/baseline
 

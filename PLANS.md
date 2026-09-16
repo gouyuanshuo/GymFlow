@@ -471,3 +471,31 @@ Acceptance: the preview fits like a phone poster and the exported design is devi
 - [x] Update product documentation with exact commands, outcomes, and honest remaining limitations.
 
 Acceptance: the main scheme is buildable, relevant tests pass, and physical results are observed or precisely bounded.
+
+## Native Chinese Android Port
+
+### Android Milestone 1 — Source audit and platform baseline
+
+- [x] Confirm the requested source branch and inspect the iOS models, workflows, audio, timer, history, Personal Best, and poster features.
+- [x] Establish a native Android project with API 26 minimum, API 36 target, Java 17, and no runtime third-party dependencies.
+- [x] Preserve the offline-first and snapshot-history boundaries in a local SQLite design.
+
+Acceptance: the Android architecture covers the current `agent/flac-and-workout-set-ui` branch without adding accounts, networking, analytics, or a backend.
+
+### Android Milestone 2 — Chinese feature port
+
+- [x] Build the Chinese Today/Plans/History/Music/Settings shell and seed Chinese exercises and plans.
+- [x] Port plan editing, exercise-library management, active workout logging, rest timing, notifications, history/calendar, and Personal Best calculations.
+- [x] Port local audio import/playlists/background playback and 1179 × 2556 workout-poster sharing.
+- [x] Add safe-area handling for Android edge-to-edge system bars.
+
+Acceptance: the core iOS journeys are usable in Simplified Chinese on Android 8.0 or newer and remain fully offline.
+
+### Android Milestone 3 — Runtime and package verification
+
+- [x] Add focused unit tests for workout totals, duration estimates, and Epley calculations.
+- [x] Build and install on Android 16/API 36 emulators, exercise an end-to-end workout, and verify persisted history, timer notification actions, poster sharing, and upgrade data retention.
+- [x] Import and play a real WAV through the Android document picker and verify foreground MediaSession controls.
+- [x] Run the final clean build, sign the distributable APK, reinstall that exact artifact, and record package/signature evidence.
+
+Acceptance: automated tests and install-level smoke checks pass, with one directly installable signed APK ready to distribute.

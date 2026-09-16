@@ -1,6 +1,6 @@
 # GymFlow
 
-GymFlow is a private, offline-first iPhone workout companion. It combines workout planning and set-by-set logging with a resilient rest timer, immutable workout history, exercise progress, and playback of audio files imported from Files.
+GymFlow is a private, offline-first workout companion for iPhone and Android. It combines workout planning and set-by-set logging with a resilient rest timer, immutable workout history, exercise progress, and playback of locally imported audio files. The native Android version is delivered in Simplified Chinese and supports Android 8.0 or newer; see [`Android/README.md`](Android/README.md) for installation and build instructions.
 
 ## Features
 
@@ -40,6 +40,7 @@ GymFlowActivityShared/          Shared ActivityKit attributes
 GymFlowLiveActivityExtension/   Lock Screen and Dynamic Island widget UI
 GymFlowTests/   Deterministic unit tests
 GymFlowUITests/ Critical-path UI smoke tests
+Android/        Native Chinese Android application, Gradle wrapper, tests, and install guide
 ```
 
 The Xcode project uses file-system synchronized groups, so new Swift files under these folders are discovered automatically.

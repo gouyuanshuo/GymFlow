@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@drawable/app_icon"
+        android:label="@string/app_name"
+        android:roundIcon="@drawable/app_icon"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.GymFlow">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="portrait">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".WorkoutActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".PlanEditorActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".ExerciseLibraryActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".SessionDetailActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".NowPlayingActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".PlaylistActivity" android:exported="false" android:screenOrientation="portrait" />
+
+        <service
+            android:name=".PlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+        <receiver
+            android:name=".WorkoutActionReceiver"
+            android:exported="false" />
+
+        <provider
+            android:name=".ShareImageProvider"
+            android:authorities="com.gouyuanshuo.gymflow.share"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+    </application>
+</manifest>
