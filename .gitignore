@@ -17,3 +17,11 @@ Packages/
 # Temporary files
 *.swp
 *~
+
+# Android local state and build products
+Android/.gradle/
+Android/local.properties
+Android/build/
+Android/app/build/
+.private/
+dist/

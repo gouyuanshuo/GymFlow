@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GymFlow</string>
+    <string name="workout_channel_name">训练进行中</string>
+    <string name="music_channel_name">音乐播放</string>
+</resources>

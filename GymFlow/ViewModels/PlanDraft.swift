@@ -4,11 +4,13 @@ import Foundation
 struct PlanDraft {
     var name: String
     var notes: String
+    var assignedPlaylistID: UUID?
     var exercises: [PlannedExerciseDraft]
 
     init(plan: WorkoutPlan? = nil) {
         name = plan?.name ?? ""
         notes = plan?.notes ?? ""
+        assignedPlaylistID = plan?.assignedPlaylistID
         exercises = plan?.orderedExercises.map(PlannedExerciseDraft.init) ?? []
     }
 }
@@ -28,10 +30,10 @@ struct PlannedExerciseDraft: Identifiable, Equatable {
         id = UUID()
         exerciseID = definition.id
         name = definition.name
-        targetSets = 3
-        targetRepetitions = 10
+        targetSets = max(1, definition.defaultSets ?? 3)
+        targetRepetitions = max(0, definition.defaultRepetitions ?? 10)
         targetWeight = 0
-        self.restSeconds = max(0, restSeconds)
+        self.restSeconds = max(0, definition.defaultRestSeconds ?? restSeconds)
         notes = ""
     }
 

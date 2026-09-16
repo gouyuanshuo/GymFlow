@@ -24,21 +24,43 @@ enum RepeatMode: String, CaseIterable, Codable {
     }
 }
 
+struct PlaybackSnapshot: Codable, Equatable {
+    var sourceTrackIDs: [UUID]
+    var queueTrackIDs: [UUID]
+    var currentTrackID: UUID?
+    var currentTime: TimeInterval
+    var queueName: String?
+    var playlistID: UUID?
+    var shuffleEnabled: Bool
+    var repeatMode: RepeatMode
+}
+
 enum PlaylistEngine {
-    static func nextIndex(
-        current: Int,
-        count: Int,
+    static func stableUniqueIDs(_ ids: [UUID]) -> [UUID] {
+        var seen: Set<UUID> = []
+        return ids.filter { seen.insert($0).inserted }
+    }
+
+    static func makeQueue(
+        sourceTrackIDs: [UUID],
         shuffle: Bool,
-        repeatMode: RepeatMode,
-        automatic: Bool,
-        randomIndex: (Range<Int>) -> Int = { Int.random(in: $0) }
-    ) -> Int? {
+        currentTrackID: UUID? = nil,
+        shuffler: ([UUID]) -> [UUID] = { $0.shuffled() }
+    ) -> [UUID] {
+        let unique = stableUniqueIDs(sourceTrackIDs)
+        guard shuffle else { return unique }
+        guard let currentTrackID, unique.contains(currentTrackID) else { return shuffler(unique) }
+        return [currentTrackID] + shuffler(unique.filter { $0 != currentTrackID })
+    }
+
+    /// The index to play after `current`.
+    ///
+    /// Returns `nil` only when playback should stop: that is when the queue runs out during
+    /// automatic advancement and repeat is not `.all`. A manual "Next" tap always wraps, so
+    /// the button is never a silent no-op on the last track.
+    static func nextIndex(current: Int, count: Int, repeatMode: RepeatMode, automatic: Bool) -> Int? {
         guard count > 0, current >= 0, current < count else { return nil }
         if automatic && repeatMode == .one { return current }
-        if shuffle, count > 1 {
-            let candidate = randomIndex(0..<(count - 1))
-            return candidate >= current ? candidate + 1 : candidate
-        }
         let candidate = current + 1
         if candidate < count { return candidate }
         return repeatMode == .all || !automatic ? 0 : nil

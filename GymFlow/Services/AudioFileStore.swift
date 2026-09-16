@@ -27,7 +27,7 @@ struct ImportedAudioFile {
 }
 
 struct AudioFileStore {
-    static let supportedExtensions: Set<String> = ["mp3", "m4a", "aac", "wav", "aif", "aiff", "caf"]
+    static let supportedExtensions: Set<String> = ["mp3", "m4a", "aac", "wav", "aif", "aiff", "caf", "flac"]
     private let directoryURL: URL
     private let fileManager: FileManager
 

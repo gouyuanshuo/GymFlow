@@ -4,8 +4,8 @@ import SwiftUI
 struct PlansView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \WorkoutPlan.sortOrder) private var plans: [WorkoutPlan]
-    @State private var editorPresented = false
-    @State private var editorPlan: WorkoutPlan?
+    @Query(sort: \Playlist.sortOrder) private var playlists: [Playlist]
+    @State private var editorPresentation: PlanEditorPresentation?
     @State private var pendingDeletion: WorkoutPlan?
     @State private var errorMessage: String?
 
@@ -18,16 +18,20 @@ struct PlansView: View {
                     } description: {
                         Text("Build a plan from the exercise library to get started.")
                     } actions: {
-                        Button("Create Plan") { presentEditor(nil) }
+                        Button("Create Plan") { presentCreateEditor() }
                             .buttonStyle(.borderedProminent)
                     }
                 } else {
                     List {
                         ForEach(plans) { plan in
                             Button { presentEditor(plan) } label: {
-                                PlanRow(plan: plan)
+                                PlanRow(
+                                    plan: plan,
+                                    playlistName: playlists.first(where: { $0.id == plan.assignedPlaylistID })?.name
+                                )
                             }
                             .buttonStyle(.plain)
+                            .accessibilityIdentifier("workout-plan-row")
                             .contextMenu {
                                 Button("Edit", systemImage: "pencil") { presentEditor(plan) }
                                 Button("Duplicate", systemImage: "plus.square.on.square") { duplicate(plan) }
@@ -47,34 +51,29 @@ struct PlansView: View {
             .navigationTitle("Workout Plans")
             .toolbar {
                 if !plans.isEmpty { EditButton() }
-                Button("Create Plan", systemImage: "plus") { presentEditor(nil) }
+                Button("Create Plan", systemImage: "plus") { presentCreateEditor() }
                     .accessibilityLabel("Create workout plan")
             }
-            .sheet(isPresented: $editorPresented) {
-                NavigationStack { PlanEditorView(plan: editorPlan) }
+            .sheet(item: $editorPresentation) { presentation in
+                NavigationStack { PlanEditorView(plan: presentation.plan) }
                     .interactiveDismissDisabled()
             }
-            .alert("Delete Workout Plan?", isPresented: Binding(
-                get: { pendingDeletion != nil },
-                set: { if !$0 { pendingDeletion = nil } }
-            )) {
+            .alert("Delete Workout Plan?", isPresented: $pendingDeletion.isPresent()) {
                 Button("Delete", role: .destructive) { deletePendingPlan() }
                 Button("Cancel", role: .cancel) { pendingDeletion = nil }
             } message: {
                 Text("Past workout history will be kept. This action cannot be undone.")
             }
-            .alert("Plan Error", isPresented: Binding(
-                get: { errorMessage != nil },
-                set: { if !$0 { errorMessage = nil } }
-            )) {
-                Button("OK", role: .cancel) { }
-            } message: { Text(errorMessage ?? "Unknown error") }
+            .errorAlert("Plan Error", message: $errorMessage)
         }
     }
 
-    private func presentEditor(_ plan: WorkoutPlan?) {
-        editorPlan = plan
-        editorPresented = true
+    private func presentEditor(_ plan: WorkoutPlan) {
+        editorPresentation = .edit(plan)
+    }
+
+    private func presentCreateEditor() {
+        editorPresentation = .create()
     }
 
     private func duplicate(_ plan: WorkoutPlan) {
@@ -104,8 +103,22 @@ struct PlansView: View {
     }
 }
 
+struct PlanEditorPresentation: Identifiable {
+    let id: UUID
+    let plan: WorkoutPlan?
+
+    static func create() -> PlanEditorPresentation {
+        PlanEditorPresentation(id: UUID(), plan: nil)
+    }
+
+    static func edit(_ plan: WorkoutPlan) -> PlanEditorPresentation {
+        PlanEditorPresentation(id: plan.id, plan: plan)
+    }
+}
+
 private struct PlanRow: View {
     let plan: WorkoutPlan
+    let playlistName: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -119,6 +132,11 @@ private struct PlanRow: View {
                 .foregroundStyle(.secondary)
             if !plan.notes.isEmpty {
                 Text(plan.notes).lineLimit(1).font(.footnote).foregroundStyle(.secondary)
+            }
+            if let playlistName {
+                Label(playlistName, systemImage: "music.note.list")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 4)
