@@ -83,7 +83,7 @@ struct ActiveWorkoutView: View {
                         setCards(exercise, sets: sets)
 
                         if restTimer.isRunning || restTimer.isPaused || restTimer.didComplete {
-                            RestTimerCard(timer: restTimer)
+                            RestTimerRingCard(timer: restTimer)
                         }
 
                         notesCard(exercise)

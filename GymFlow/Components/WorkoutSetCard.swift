@@ -7,6 +7,7 @@ struct WorkoutSetCard: View {
     let onToggleCompletion: () -> Void
     let onRemove: () -> Void
     @State private var activePicker: WorkoutValuePickerKind?
+    @State private var showsPlateCalculator = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -40,15 +41,34 @@ struct WorkoutSetCard: View {
             }
 
             HStack(alignment: .top, spacing: 12) {
-                WorkoutValueButton(
-                    title: "Weight",
-                    unit: "kg",
-                    value: GymFlowFormatters.weight(set.weight),
-                    accessibilityLabel: "Set \(set.setNumber) weight",
-                    accessibilityValue: "\(GymFlowFormatters.weight(set.weight)) kilograms",
-                    accessibilityIdentifier: "set-\(set.setNumber)-weight-picker"
-                ) {
-                    activePicker = .weight
+                HStack(spacing: 6) {
+                    WorkoutValueButton(
+                        title: "Weight",
+                        unit: "kg",
+                        value: GymFlowFormatters.weight(set.weight),
+                        accessibilityLabel: "Set \(set.setNumber) weight",
+                        accessibilityValue: "\(GymFlowFormatters.weight(set.weight)) kilograms",
+                        accessibilityIdentifier: "set-\(set.setNumber)-weight-picker"
+                    ) {
+                        activePicker = .weight
+                    }
+
+                    if set.weight >= 20 {
+                        Button {
+                            showsPlateCalculator = true
+                        } label: {
+                            Image(systemName: "circle.circle")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(GymTheme.cyan)
+                                .frame(width: 36, height: 48)
+                                .background(Color(uiColor: .tertiarySystemFill))
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        .padding(.top, 24)
+                        .accessibilityLabel(
+                            "Plate calculator for \(GymFlowFormatters.weight(set.weight)) kg"
+                        )
+                    }
                 }
 
                 WorkoutValueButton(
@@ -77,8 +97,8 @@ struct WorkoutSetCard: View {
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(
-                    set.isCompleted ? Color.green.opacity(0.32) : Color.secondary.opacity(0.08),
-                    lineWidth: 1
+                    set.isCompleted ? Color.green.opacity(0.35) : Color.primary.opacity(0.08),
+                    lineWidth: set.isCompleted ? 1.5 : 1
                 )
         }
         .animation(.snappy, value: set.isCompleted)
@@ -93,11 +113,14 @@ struct WorkoutSetCard: View {
                 onChange()
             }
         }
+        .sheet(isPresented: $showsPlateCalculator) {
+            PlateCalculatorSheet(initialWeight: set.weight)
+        }
     }
 
     private var cardBackground: Color {
         if set.isCompleted {
-            return Color.green.opacity(0.07)
+            return Color.green.opacity(0.08)
         }
         return Color(uiColor: .secondarySystemBackground)
     }
