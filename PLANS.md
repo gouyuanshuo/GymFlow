@@ -471,3 +471,34 @@ Acceptance: the preview fits like a phone poster and the exported design is devi
 - [x] Update product documentation with exact commands, outcomes, and honest remaining limitations.
 
 Acceptance: the main scheme is buildable, relevant tests pass, and physical results are observed or precisely bounded.
+
+## Google Drive Music and Exercise Guidance Upgrade
+
+### Design Milestone — Review scope and architecture
+
+- [x] Inspect the existing local-audio, playlist, exercise-library, workout, and data-deletion flows.
+- [x] Confirm Google Drive as the music source and upload of already-imported songs as the first cloud workflow.
+- [x] Confirm three offline guidance animations: Barbell Bench Press, Barbell Squat, and Romanian Deadlift.
+- [x] Draft the separate music and exercise-guide design specs.
+- [ ] Review the written specs with the app owner and write implementation plans.
+
+Acceptance: streaming semantics, upload safety, guide content, and external Google setup are agreed before code changes.
+
+### Cloud Music Milestones — Authorization, upload, and playback
+
+- [ ] Add optional Google authorization and a narrowly scoped Drive client.
+- [ ] Upload imported songs with progress, verification, and retry while preserving local files.
+- [ ] Add authenticated byte-range playback without permanent cloud-song copies.
+- [ ] Offer confirmed local-copy removal after successful cloud playback; preserve playlists and safe deletion semantics.
+- [ ] Build and test each milestone, then verify on a signed iPhone with the configured Google account.
+
+Acceptance: a verified cloud-only song plays from Google Drive through the existing music controls while plans, workouts, and history remain available offline.
+
+### Exercise Guide Milestones — Offline animated clips
+
+- [ ] Create and inspect three small silent exercise animations from repeatable vector source.
+- [ ] Attach stable guide keys to the three built-in exercises without changing completed history.
+- [ ] Present accessible guides from Exercise Detail and Active Workout without interrupting music or rest timing.
+- [ ] Build, test, and inspect playback on simulator and iPhone.
+
+Acceptance: each selected exercise has a readable offline guide and other exercises remain unaffected.
