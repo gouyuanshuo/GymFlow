@@ -14,6 +14,7 @@
 - Completed: deterministic first-tap plan routing, stable Now Playing presentation ownership, and history-based duration estimation with simulator and physical-iPhone verification.
 - Completed: Active Workout exercise-screen redesign with responsive set cards, compact reference/timer UI, safe-area player/navigation controls, and simulator plus physical-iPhone verification.
 - Current work: picker, Personal Best, PR, and share-poster implementation plus automated/device verification are complete.
+- Planned: Google Drive upload and cloud-only music playback, plus three offline exercise guidance animations; written design review is pending.
 - Next action: perform the remaining hands-on physical picker/share/Exercise Detail gestures when Xcode UI automation or a human device pass is available, plus the existing Dynamic Island/alert-intensity checks.
 
 ## Engineering log
@@ -1223,3 +1224,11 @@ Known remaining issue: `RestTimerService.swift:46` warns that the main-actor-iso
 `legacyKeyPrefix` is referenced from a nonisolated context. It predates this pass and will become an
 error under the Swift 6 language mode.
 
+### 2026-09-28 — Google Drive music and exercise guidance design
+
+- Confirmed the requested source is Google Drive and the first upload path is for songs already imported into GymFlow. The goal is no permanent app-owned song copy after verified upload and an explicit removal action; network playback still buffers temporary bytes.
+- Confirmed the first silent, offline guidance animations are for Barbell Bench Press, Barbell Squat, and Romanian Deadlift.
+- Inspected the current `AVAudioPlayer` and `AudioFileStore` path, `ImportedTrack` and playlist identity, Exercise Detail and Active Workout entry points, seed behavior, and Settings deletion semantics. Existing audio is local-only and the exercise model has no guide reference.
+- Chose direct Google Drive API access because its blob downloads support byte ranges; opening Drive through Files may download the whole file. The approved conversational design retains local originals until remote verification and cloud playback succeed, then offers explicit local-copy removal. Removing app metadata will not delete the Google Drive original.
+- Drafted separate design specs in `docs/superpowers/specs/` and added unchecked implementation milestones to `PLANS.md`. These are design artifacts awaiting the app owner's written-spec review. No production code or app configuration was changed.
+- Build and tests: not run for this documentation-only milestone. No result is claimed for Google authentication, streaming, or clip playback.
