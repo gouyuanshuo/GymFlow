@@ -1232,3 +1232,9 @@ error under the Swift 6 language mode.
 - Chose direct Google Drive API access because its blob downloads support byte ranges; opening Drive through Files may download the whole file. The approved conversational design retains local originals until remote verification and cloud playback succeed, then offers explicit local-copy removal. Removing app metadata will not delete the Google Drive original.
 - Drafted separate design specs in `docs/superpowers/specs/` and added unchecked implementation milestones to `PLANS.md`. These are design artifacts awaiting the app owner's written-spec review. No production code or app configuration was changed.
 - Build and tests: not run for this documentation-only milestone. No result is claimed for Google authentication, streaming, or clip playback.
+
+### 2026-09-28 — Google Drive music and exercise-guide implementation plans
+
+- The app owner approved both written designs and asked to proceed. Created separate implementation plans in `docs/superpowers/plans/` for the cloud-music and offline-guide subsystems.
+- Mapped existing models, player APIs, seed behavior, project configuration, tests and available simulator destinations. The plans keep local audio intact, gate local-copy removal on remote verification and cloud playback, and attach guide keys without rewriting workout history.
+- Planning only: no production code, resources, or Xcode settings changed. Build and tests were not run for this documentation-only step; implementation and live Google Drive verification remain outstanding.

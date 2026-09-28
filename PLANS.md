@@ -480,7 +480,8 @@ Acceptance: the main scheme is buildable, relevant tests pass, and physical resu
 - [x] Confirm Google Drive as the music source and upload of already-imported songs as the first cloud workflow.
 - [x] Confirm three offline guidance animations: Barbell Bench Press, Barbell Squat, and Romanian Deadlift.
 - [x] Draft the separate music and exercise-guide design specs.
-- [ ] Review the written specs with the app owner and write implementation plans.
+- [x] Review the written specs with the app owner and write separate implementation plans.
+- [ ] Review the implementation plans with the app owner and choose an execution approach.
 
 Acceptance: streaming semantics, upload safety, guide content, and external Google setup are agreed before code changes.
 
