@@ -27,23 +27,25 @@ struct WorkoutCompletionView: View {
         // Read once: the four metric tiles below would otherwise each rescan every logged set.
         let totals = session.totals
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 70))
-                        .foregroundStyle(.green)
-                        .accessibilityHidden(true)
-                    VStack(spacing: 6) {
-                        Text("Workout Complete").font(.largeTitle.bold())
-                        Text(session.planNameSnapshot).font(.title3).foregroundStyle(.secondary)
-                    }
+            ZStack {
+                ScrollView {
+                    VStack(spacing: 24) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 70))
+                            .foregroundStyle(.green)
+                            .glow(color: .green, radius: 16)
+                            .accessibilityHidden(true)
+                        VStack(spacing: 6) {
+                            Text("Workout Complete").font(.largeTitle.bold())
+                            Text(session.planNameSnapshot).font(.title3).foregroundStyle(.secondary)
+                        }
 
-                    LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 12) {
-                        SummaryMetric(title: "Duration", value: GymFlowFormatters.duration(session.duration), icon: "clock")
-                        SummaryMetric(title: "Exercises", value: "\(totals.exerciseCount)", icon: "dumbbell")
-                        SummaryMetric(title: "Sets", value: "\(totals.setCount)", icon: "checklist")
-                        SummaryMetric(title: "Repetitions", value: "\(totals.repetitions)", icon: "repeat")
-                    }
+                        LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 12) {
+                            SummaryMetric(title: "Duration", value: GymFlowFormatters.duration(session.duration), icon: "clock")
+                            SummaryMetric(title: "Exercises", value: "\(totals.exerciseCount)", icon: "dumbbell")
+                            SummaryMetric(title: "Sets", value: "\(totals.setCount)", icon: "checklist")
+                            SummaryMetric(title: "Repetitions", value: "\(totals.repetitions)", icon: "repeat")
+                        }
                     SummaryMetric(
                         title: "Training Volume",
                         value: "\(GymFlowFormatters.weight(totals.volume)) kg",
@@ -83,6 +85,9 @@ struct WorkoutCompletionView: View {
                 }
                 .padding()
             }
+
+            ConfettiCanvas()
+        }
             .navigationBarBackButtonHidden()
             .sheet(item: $sharePresentation) { presentation in
                 NavigationStack {
@@ -154,12 +159,13 @@ private struct WorkoutPersonalBestCelebration: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .gymCard()
+        .gymGlassCard(highlighted: true, highlightColor: GymTheme.gold)
         .overlay(alignment: .topTrailing) {
             Image(systemName: "trophy.fill")
                 .font(.title2)
-                .foregroundStyle(.orange.opacity(0.7))
-                .padding(16)
+                .foregroundStyle(GymTheme.gold.opacity(0.85))
+                .glow(color: GymTheme.gold, radius: 8)
+                .padding(18)
                 .accessibilityHidden(true)
         }
         .accessibilityIdentifier("workout-personal-bests")
@@ -173,11 +179,17 @@ struct SummaryMetric: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            Image(systemName: icon).foregroundStyle(.tint)
-            Text(value).font(.title3.bold()).minimumScaleFactor(0.7)
-            Text(title).font(.caption).foregroundStyle(.secondary)
+            Image(systemName: icon)
+                .font(.headline)
+                .foregroundStyle(GymTheme.volt)
+            Text(value)
+                .font(.title3.bold().monospacedDigit())
+                .minimumScaleFactor(0.7)
+            Text(title)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, minHeight: 90)
-        .gymCard()
+        .gymGlassCard()
     }
 }

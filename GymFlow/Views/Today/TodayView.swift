@@ -188,8 +188,17 @@ private struct SelectedPlanCard: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Selected Workout").font(.caption).foregroundStyle(.secondary)
-                Text(plan.name).font(.title.bold())
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(GymTheme.volt)
+                        .frame(width: 6, height: 6)
+                        .glow(color: GymTheme.volt, radius: 3)
+                    Text("SELECTED WORKOUT")
+                        .font(.caption2.weight(.heavy))
+                        .foregroundStyle(GymTheme.volt)
+                        .tracking(0.5)
+                }
+                Text(plan.name).font(.title2.bold())
             }
             Spacer()
             Menu {
@@ -206,15 +215,29 @@ private struct SelectedPlanCard: View {
     }
 
     private var facts: some View {
-        HStack(spacing: 24) {
-            Label("\(plan.exercises.count) exercises", systemImage: "list.number")
+        HStack(spacing: 12) {
+            HStack(spacing: 6) {
+                Image(systemName: "figure.strengthtraining.traditional")
+                    .foregroundStyle(GymTheme.volt)
+                Text("\(plan.exercises.count) exercises")
+            }
+            .font(.subheadline.weight(.medium))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.primary.opacity(0.05))
+            .clipShape(Capsule())
+
             Label("About \(durationEstimate.roundedMinutes) min", systemImage: "clock")
                 .accessibilityIdentifier("workout-duration-estimate")
                 .accessibilityValue(durationEstimate.source == .history
                     ? "Based on \(durationEstimate.sampleCount) recent workouts"
                     : "Based on plan targets")
+                .font(.subheadline.weight(.medium))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.primary.opacity(0.05))
+                .clipShape(Capsule())
         }
-        .font(.subheadline)
     }
 }
 
@@ -224,18 +247,47 @@ private struct ActiveSessionCard: View {
     let onResume: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Workout in Progress", systemImage: "bolt.heart.fill")
-                .font(.headline)
-                .foregroundStyle(.tint)
-            Text(session.planNameSnapshot).font(.title3.bold())
-            Text("Started \(session.startedAt, format: .relative(presentation: .named))")
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(GymTheme.volt)
+                        .frame(width: 8, height: 8)
+                        .glow(color: GymTheme.volt, radius: 4)
+                    Text("WORKOUT IN PROGRESS")
+                        .font(.caption2.weight(.heavy))
+                        .foregroundStyle(GymTheme.volt)
+                        .tracking(0.5)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(GymTheme.volt.opacity(0.12))
+                .clipShape(Capsule())
+
+                Spacer()
+
+                Text(session.startedAt, format: .relative(presentation: .named))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(session.planNameSnapshot)
+                    .font(.title3.bold())
+                Text("Started \(session.startedAt, format: .relative(presentation: .named))")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
             Button("Resume Workout", action: onResume)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(PrimaryButtonStyle())
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .gymCard()
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(GymTheme.volt.opacity(0.35), lineWidth: 1.5)
+        }
     }
 }
 
