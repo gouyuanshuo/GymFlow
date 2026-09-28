@@ -13,6 +13,7 @@ build/
 # Swift Package Manager
 .build/
 Packages/
+.worktrees/
 
 # Temporary files
 *.swp
