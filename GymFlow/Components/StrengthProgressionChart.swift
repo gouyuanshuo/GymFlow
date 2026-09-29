@@ -197,6 +197,13 @@ struct StrengthProgressionChart: View {
             }
         }
         .chartXSelection(value: $rawSelectedDate)
+        // A tap selects a point without installing a drag recognizer over the parent scroll view.
+        .chartGesture { proxy in
+            SpatialTapGesture()
+                .onEnded { event in
+                    proxy.selectXValue(at: event.location.x)
+                }
+        }
         .onChange(of: rawSelectedDate) { _, date in
             if let date { findClosestPoint(to: date) }
         }

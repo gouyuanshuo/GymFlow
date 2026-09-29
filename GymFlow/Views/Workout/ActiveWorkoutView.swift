@@ -119,12 +119,11 @@ struct ActiveWorkoutView: View {
                     Button("Finish") { finishConfirmation = true }.fontWeight(.semibold)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu("Workout options", systemImage: "ellipsis.circle") {
-                        Button("Cancel Workout", systemImage: "xmark.circle", role: .destructive) {
-                            cancelConfirmation = true
-                        }
-                        .accessibilityIdentifier("cancel-workout-menu-action")
+                    Button("Cancel Workout", systemImage: "xmark.circle", role: .destructive) {
+                        cancelConfirmation = true
                     }
+                    .labelStyle(.iconOnly)
+                    .accessibilityIdentifier("cancel-workout-toolbar")
                 }
             }
             .interactiveDismissDisabled()

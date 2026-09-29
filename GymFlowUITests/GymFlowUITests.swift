@@ -744,7 +744,7 @@ final class GymFlowUITests: XCTestCase {
             bottom: settings.frame.midY + 100,
             horizontalPosition: 0.97
         )
-        motion.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)).tap()
+        motion.buttons["MOTION_TITLE"].tap()
         XCTAssertTrue(settings.navigationBars["Motion"].waitForExistence(timeout: 5))
         XCTAssertTrue(reduceMotion.waitForExistence(timeout: 5))
         return reduceMotion
@@ -772,12 +772,9 @@ final class GymFlowUITests: XCTestCase {
         if cancelTimer.exists {
             cancelTimer.tap()
         }
-        let workoutOptions = app.buttons["Workout options"]
-        XCTAssertTrue(workoutOptions.waitForExistence(timeout: 5))
-        workoutOptions.tap()
-        let cancelAction = app.buttons["Cancel Workout"].firstMatch
-        XCTAssertTrue(cancelAction.waitForExistence(timeout: 3))
-        cancelAction.tap()
+        let cancelControl = app.buttons["cancel-workout-toolbar"]
+        XCTAssertTrue(cancelControl.waitForExistence(timeout: 5))
+        cancelControl.tap()
         let confirmation = app.buttons.matching(
             identifier: "confirm-cancel-workout"
         ).firstMatch
