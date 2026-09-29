@@ -511,7 +511,7 @@ Acceptance: each selected exercise has a readable offline guide and other exerci
 - [ ] Fix plate loading/labels and bar-switch target behavior.
   - [x] Prove exact plate loading and label precision against the real calculator with standalone RED→GREEN tests.
   - [x] Clamp bar switches, preserve unsupported non-finite targets, and add a typechecked bar-switch UI flow.
-  - [ ] Run the bar-switch UI and full iOS calculator tests/build.
+  - [x] Run the bar-switch UI and full iOS calculator tests/build (hosted run 36559493891).
 - [ ] Fix strength-chart metrics and keep long set histories reachable.
   - [x] Share the e1RM policy, report true best weight, gather repeated exercise records by stable identity, and add a typechecked six-set scroll flow.
   - [x] Verify six distinct capsules and horizontal scrolling in the normal-text native UI run.

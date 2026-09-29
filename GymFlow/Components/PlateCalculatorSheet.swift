@@ -3,6 +3,7 @@ import SwiftUI
 /// Modern visual barbell plate calculator sheet.
 struct PlateCalculatorSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var targetWeight: Double
     @State private var barWeight: Double = 20.0
@@ -172,12 +173,21 @@ struct PlateCalculatorSheet: View {
         .gymGlassCard()
     }
 
+    @ViewBuilder
     private var quickAdjustments: some View {
-        HStack(spacing: 12) {
-            adjustButton(amount: -5.0)
-            adjustButton(amount: -2.5)
-            adjustButton(amount: 2.5)
-            adjustButton(amount: 5.0)
+        let amounts = [-5.0, -2.5, 2.5, 5.0]
+        if dynamicTypeSize.isAccessibilitySize {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                ForEach(amounts, id: \.self) { amount in
+                    adjustButton(amount: amount)
+                }
+            }
+        } else {
+            HStack(spacing: 12) {
+                ForEach(amounts, id: \.self) { amount in
+                    adjustButton(amount: amount)
+                }
+            }
         }
     }
 
