@@ -522,13 +522,15 @@ Acceptance: each selected exercise has a readable offline guide and other exerci
 - [ ] Use readable adaptive foreground accents and respect Reduce Motion in celebrations.
   - [x] Add light/dark foreground roles and a static celebration under Reduce Motion; pass a portable contrast check.
   - [ ] Inspect light/dark colors and celebration behavior on an iOS simulator or device.
-- [ ] Bound plate calculation and query only completed sessions in exercise progress.
+- [x] Bound plate calculation and query only completed sessions in exercise progress.
   - [x] Reject unsupported calculator input before allocation and show a recovery action without changing a set.
   - [x] Filter progress sessions in SwiftData and preserve every matching completed set in a session.
-  - [ ] Run the native iOS calculator/history tests and build.
+  - [x] Run the native iOS calculator/history tests and build (GitHub run 36541886679).
 - [ ] Run the full branch build, tests, semantic lint, and final review before integration.
   - [x] Complete a fresh read-only review with no Critical or Important source findings.
   - [x] Run semantic lint and `git diff --check` with zero semantic/whitespace findings.
+  - [x] Pass the hosted generic simulator build and all 117 unit/render tests.
+  - [ ] Verify six distinct history capsules after correcting the UI test's child-element counting.
   - [ ] Run the native build, full unit/UI tests, and simulator visual acceptance when Xcode/CoreSimulator works.
   - [ ] Run the same native gate on GitHub's Mac runner while this command session cannot reach macOS services.
 
