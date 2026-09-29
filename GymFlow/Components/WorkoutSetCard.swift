@@ -70,6 +70,7 @@ struct WorkoutSetCard: View {
                                 ? "Plate calculator for \(GymFlowFormatters.weight(set.weight)) kg"
                                 : "Plate calculator for invalid weight"
                         )
+                        .accessibilityIdentifier("set-\(set.setNumber)-plate-calculator")
                     }
                 }
 
@@ -243,5 +244,6 @@ private struct SetCompletionButton: View {
         )
         .accessibilityValue(isCompleted ? "Completed" : "Not completed")
         .accessibilityHint(isCompleted ? "Removes completion" : "Starts the rest timer")
+        .accessibilityIdentifier("set-completion-\(setNumber)")
     }
 }

@@ -174,7 +174,8 @@ final class GymFlowUITests: XCTestCase {
         weightWheel.adjust(toPickerWheelValue: "20")
         app.buttons["confirm-workout-value"].tap()
 
-        let calculator = app.buttons["Plate calculator for 20 kg"]
+        let calculator = app.otherElements["workout-set-card-1"]
+            .buttons["set-1-plate-calculator"]
         scrollToElement(calculator, in: app, useMeasuredDrag: true)
         calculator.tap()
         XCTAssertTrue(app.navigationBars["Plate Calculator"].waitForExistence(timeout: 5))
@@ -216,15 +217,18 @@ final class GymFlowUITests: XCTestCase {
             }
         }
         for number in 1...6 {
-            let complete = app.buttons["Complete set \(number)"]
-            scrollToElement(complete, in: app)
-            complete.tap()
-            let marked = app.buttons["Mark set \(number) incomplete"]
-            if !marked.waitForExistence(timeout: 2) {
-                scrollToElement(complete, in: app)
-                complete.press(forDuration: 0.15)
+            let completion = app.buttons["set-completion-\(number)"]
+            scrollToElement(completion, in: app)
+            completion.tap()
+            let completed = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "value == %@", "Completed"),
+                object: completion
+            )
+            if XCTWaiter.wait(for: [completed], timeout: 2) != .completed {
+                scrollToElement(completion, in: app)
+                completion.press(forDuration: 0.15)
             }
-            XCTAssertTrue(marked.waitForExistence(timeout: 5), "Set \(number) completes")
+            XCTAssertEqual(completion.value as? String, "Completed", "Set \(number) completes")
         }
 
         app.buttons["Finish"].tap()
@@ -751,10 +755,11 @@ final class GymFlowUITests: XCTestCase {
             horizontalPosition: 0.97
         )
         motion.buttons["MOTION_TITLE"].tap()
-        if !reduceMotion.waitForExistence(timeout: 2) {
-            // At accessibility sizes Settings can ignore the brief nested-button tap.
-            motion.coordinate(withNormalizedOffset: CGVector(dx: 0.32, dy: 0.5))
-                .press(forDuration: 0.15)
+        // A touch during Settings' large-text scrolling can be consumed without navigation.
+        for horizontalPosition in [0.32, 0.5, 0.15] {
+            if reduceMotion.waitForExistence(timeout: 2) { break }
+            motion.coordinate(withNormalizedOffset: CGVector(dx: horizontalPosition, dy: 0.5))
+                .press(forDuration: 0.2)
         }
         XCTAssertTrue(settings.navigationBars["Motion"].waitForExistence(timeout: 5))
         XCTAssertTrue(reduceMotion.waitForExistence(timeout: 5))
