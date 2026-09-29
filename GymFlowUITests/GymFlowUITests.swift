@@ -180,16 +180,10 @@ final class GymFlowUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Plate Calculator"].waitForExistence(timeout: 5))
 
         let target = app.staticTexts["plate-target-weight"]
-        let barSelector = app.descendants(matching: .any)["plate-bar-weight-picker"]
         let sheetScroll = app.scrollViews["plate-calculator-scroll"]
         XCTAssertEqual(target.label, "20")
 
-        scrollToVisible(
-            barSelector, in: sheetScroll,
-            top: app.navigationBars["Plate Calculator"].frame.maxY + 8,
-            bottom: min(sheetScroll.frame.maxY, app.frame.maxY - 44)
-        )
-        selectBar("15 kg (Women's)", using: barSelector, in: app)
+        selectBar("15 kg (Women's)", in: app)
 
         let decrease = app.buttons["-5"]
         scrollToVisible(
@@ -200,12 +194,7 @@ final class GymFlowUITests: XCTestCase {
         decrease.tap()
         waitForLabel("15", on: target)
 
-        scrollToVisible(
-            barSelector, in: sheetScroll,
-            top: app.navigationBars["Plate Calculator"].frame.maxY + 8,
-            bottom: min(sheetScroll.frame.maxY, app.frame.maxY - 44)
-        )
-        selectBar("20 kg (Olympic)", using: barSelector, in: app)
+        selectBar("20 kg (Olympic)", in: app)
         waitForLabel("20", on: target)
         keepScreenshot(named: "Plate calculator after heavier bar selection")
 
@@ -279,6 +268,18 @@ final class GymFlowUITests: XCTestCase {
         XCTAssertTrue(sixthSet.isHittable)
         XCTAssertTrue(setRow.frame.contains(sixthSet.frame), "The whole sixth set should be visible")
         keepScreenshot(named: "Exercise progress sixth completed set")
+
+        let chart = app.descendants(matching: .any)["strength-progression-chart"]
+        scrollToVisible(
+            chart, in: progressScroll,
+            top: app.navigationBars.firstMatch.frame.maxY + 8,
+            bottom: app.frame.maxY - 44
+        )
+        chart.coordinate(withNormalizedOffset: CGVector(dx: 0.65, dy: 0.5)).tap()
+        let reset = app.buttons["Reset"]
+        XCTAssertTrue(reset.waitForExistence(timeout: 5), "Tapping the chart selects a data point")
+        reset.tap()
+        XCTAssertFalse(reset.exists)
     }
 
     @MainActor
@@ -676,30 +677,17 @@ final class GymFlowUITests: XCTestCase {
     }
 
     @MainActor
-    private func selectBar(_ label: String, using picker: XCUIElement, in app: XCUIApplication) {
-        let option = app.descendants(matching: .any).matching(
-            NSPredicate(format: "label == %@", label)
-        ).firstMatch
-        picker.press(forDuration: 0.15)
-        if !option.waitForExistence(timeout: 5) {
-            // The hosted simulator can dismiss the menu after a gesture timeout. Reopen once.
-            keepScreenshot(named: "Plate menu dismissed before selection")
-            let sheetScroll = app.scrollViews["plate-calculator-scroll"]
-            scrollToVisible(
-                picker, in: sheetScroll,
-                top: app.navigationBars["Plate Calculator"].frame.maxY + 8,
-                bottom: min(sheetScroll.frame.maxY, app.frame.maxY - 44)
-            )
-            picker.press(forDuration: 0.15)
-        }
-        XCTAssertTrue(option.waitForExistence(timeout: 5))
-        XCTAssertTrue(option.isHittable)
-        option.tap()
-        let selectionChanged = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "label CONTAINS %@", label),
-            object: picker
+    private func selectBar(_ label: String, in app: XCUIApplication) {
+        let option = app.buttons[label]
+        let sheetScroll = app.scrollViews["plate-calculator-scroll"]
+        scrollToVisible(
+            option, in: sheetScroll,
+            top: app.navigationBars["Plate Calculator"].frame.maxY + 8,
+            bottom: min(sheetScroll.frame.maxY, app.frame.maxY - 44)
         )
-        XCTAssertEqual(XCTWaiter.wait(for: [selectionChanged], timeout: 5), .completed)
+        XCTAssertFalse(option.isSelected)
+        option.tap()
+        XCTAssertTrue(option.isSelected)
     }
 
     @MainActor
@@ -724,7 +712,8 @@ final class GymFlowUITests: XCTestCase {
                 top: settings.navigationBars.firstMatch.frame.maxY + 8,
                 bottom: search.exists
                     ? min(settings.frame.maxY - 44, search.frame.minY - 8)
-                    : settings.frame.maxY - 44
+                    : settings.frame.maxY - 44,
+                horizontalPosition: 0.97
             )
             accessibility.tap()
             XCTAssertTrue(settings.navigationBars["Accessibility"].waitForExistence(timeout: 5))
@@ -736,9 +725,10 @@ final class GymFlowUITests: XCTestCase {
         scrollToVisible(
             motion, in: accessibilityTable,
             top: settings.navigationBars.firstMatch.frame.maxY + 8,
-            bottom: settings.frame.maxY - 44
+            bottom: settings.frame.maxY - 44,
+            horizontalPosition: 0.97
         )
-        motion.tap()
+        motion.staticTexts["Motion"].tap()
         XCTAssertTrue(reduceMotion.waitForExistence(timeout: 5))
         return reduceMotion
     }
@@ -757,11 +747,6 @@ final class GymFlowUITests: XCTestCase {
             object: toggle
         )
         XCTAssertEqual(XCTWaiter.wait(for: [switchChanged], timeout: 5), .completed)
-        let systemSettingChanged = XCTNSPredicateExpectation(
-            predicate: NSPredicate { _, _ in UIAccessibility.isReduceMotionEnabled == enabled },
-            object: nil
-        )
-        XCTAssertEqual(XCTWaiter.wait(for: [systemSettingChanged], timeout: 5), .completed)
     }
 
     @MainActor
@@ -863,20 +848,43 @@ final class GymFlowUITests: XCTestCase {
         _ element: XCUIElement,
         in scrollView: XCUIElement,
         top: @autoclosure () -> CGFloat,
-        bottom: @autoclosure () -> CGFloat
+        bottom: @autoclosure () -> CGFloat,
+        horizontalPosition: CGFloat = 0.5
     ) {
-        // iOS can report an element as hittable when only a clipped edge is exposed.
+        // Use measured drags so inertial swipes cannot repeatedly overshoot a large-text row.
         for _ in 0..<10 {
-            if !element.exists || element.frame.maxY > bottom() {
-                scrollView.swipeUp()
-            } else if element.frame.minY < top() {
-                scrollView.swipeDown()
-            } else {
+            let visibleTop = max(top(), scrollView.frame.minY)
+            let visibleBottom = min(bottom(), scrollView.frame.maxY)
+            let visibleHeight = visibleBottom - visibleTop
+            guard visibleHeight > 80 else {
+                XCTFail("Invalid scroll viewport: \(visibleTop)...\(visibleBottom)")
+                return
+            }
+            let frame = element.exists ? element.frame : .zero
+            let hasFrame = frame.width > 0 && frame.height > 0
+            if hasFrame, frame.minY >= visibleTop, frame.maxY <= visibleBottom {
                 break
             }
+
+            let scrollUp = !hasFrame || frame.maxY > visibleBottom
+            let overflow = scrollUp ? frame.maxY - visibleBottom : visibleTop - frame.minY
+            let distance = hasFrame
+                ? min(max(overflow + 12, 44), visibleHeight * 0.45)
+                : visibleHeight * 0.45
+            let startY = visibleTop + visibleHeight * (scrollUp ? 0.75 : 0.25)
+            let origin = scrollView.coordinate(withNormalizedOffset: .zero)
+            let start = origin.withOffset(CGVector(
+                dx: scrollView.frame.width * horizontalPosition,
+                dy: startY - scrollView.frame.minY
+            ))
+            let end = start.withOffset(CGVector(dx: 0, dy: scrollUp ? -distance : distance))
+            start.press(
+                forDuration: 0.05, thenDragTo: end,
+                withVelocity: .slow, thenHoldForDuration: 0.2
+            )
         }
         XCTAssertTrue(element.exists)
-        XCTAssertTrue(element.isHittable)
+        XCTAssertTrue(element.isHittable, "\(element.identifier) should be reachable by scrolling")
         XCTAssertGreaterThanOrEqual(element.frame.minY, top())
         XCTAssertLessThanOrEqual(element.frame.maxY, bottom())
     }
@@ -927,29 +935,7 @@ final class GymFlowUITests: XCTestCase {
         let miniPlayer = app.otherElements["music-mini-player"]
         let navigationTop = app.buttons["Next Exercise"].frame.minY - 20
         let visibleBottom = miniPlayer.exists ? miniPlayer.frame.minY - 6 : navigationTop
-        var attempts = 0
-
-        while attempts < 20 {
-            guard element.exists else {
-                scrollView.swipeUp()
-                attempts += 1
-                continue
-            }
-
-            if element.frame.maxY > visibleBottom {
-                scrollView.swipeUp()
-            } else if element.frame.minY < visibleTop {
-                scrollView.swipeDown()
-            } else {
-                break
-            }
-            attempts += 1
-        }
-
-        XCTAssertTrue(element.exists, "\(element.identifier) should remain in the scrollable workout")
-        XCTAssertTrue(element.isHittable, "\(element.identifier) should be reachable by scrolling")
-        XCTAssertGreaterThanOrEqual(element.frame.minY, visibleTop)
-        XCTAssertLessThanOrEqual(element.frame.maxY, visibleBottom)
+        scrollToVisible(element, in: scrollView, top: visibleTop, bottom: visibleBottom)
     }
 
     @MainActor

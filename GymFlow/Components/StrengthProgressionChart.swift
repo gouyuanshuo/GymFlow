@@ -38,6 +38,7 @@ struct StrengthProgressionChart: View {
     let dataPoints: [StrengthDataPoint]
     let bestWeight: Double
     @State private var selectedPoint: StrengthDataPoint?
+    @State private var rawSelectedDate: Date?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -110,7 +111,10 @@ struct StrengthProgressionChart: View {
 
             if selectedPoint != nil {
                 Button("Reset") {
-                    withAnimation(.snappy) { selectedPoint = nil }
+                    withAnimation(.snappy) {
+                        selectedPoint = nil
+                        rawSelectedDate = nil
+                    }
                 }
                 .font(.caption.weight(.medium))
                 .buttonStyle(.bordered)
@@ -192,33 +196,12 @@ struct StrengthProgressionChart: View {
                 }
             }
         }
-        .chartOverlay { proxy in
-            GeometryReader { geometry in
-                let selectPoint: (CGPoint) -> Void = { location in
-                    guard let plotFrame = proxy.plotFrame else { return }
-                    let xPosition = location.x - geometry[plotFrame].origin.x
-                    if let date: Date = proxy.value(atX: xPosition) {
-                        findClosestPoint(to: date)
-                    }
-                }
-                Rectangle()
-                    .fill(Color.clear)
-                    .contentShape(Rectangle())
-                    // Allow the surrounding history to scroll when a swipe starts on the chart.
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 10)
-                            .onChanged { value in
-                                guard abs(value.translation.width) > abs(value.translation.height)
-                                else { return }
-                                selectPoint(value.location)
-                            }
-                    )
-                    .simultaneousGesture(
-                        SpatialTapGesture().onEnded { selectPoint($0.location) }
-                    )
-            }
+        .chartXSelection(value: $rawSelectedDate)
+        .onChange(of: rawSelectedDate) { _, date in
+            if let date { findClosestPoint(to: date) }
         }
         .frame(height: 180)
+        .accessibilityIdentifier("strength-progression-chart")
     }
 
     private var statMetricsRow: some View {
