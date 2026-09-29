@@ -219,6 +219,12 @@ final class GymFlowUITests: XCTestCase {
             let complete = app.buttons["Complete set \(number)"]
             scrollToElement(complete, in: app)
             complete.tap()
+            let marked = app.buttons["Mark set \(number) incomplete"]
+            if !marked.waitForExistence(timeout: 2) {
+                scrollToElement(complete, in: app)
+                complete.press(forDuration: 0.15)
+            }
+            XCTAssertTrue(marked.waitForExistence(timeout: 5), "Set \(number) completes")
         }
 
         app.buttons["Finish"].tap()
@@ -745,6 +751,11 @@ final class GymFlowUITests: XCTestCase {
             horizontalPosition: 0.97
         )
         motion.buttons["MOTION_TITLE"].tap()
+        if !reduceMotion.waitForExistence(timeout: 2) {
+            // At accessibility sizes Settings can ignore the brief nested-button tap.
+            motion.coordinate(withNormalizedOffset: CGVector(dx: 0.32, dy: 0.5))
+                .press(forDuration: 0.15)
+        }
         XCTAssertTrue(settings.navigationBars["Motion"].waitForExistence(timeout: 5))
         XCTAssertTrue(reduceMotion.waitForExistence(timeout: 5))
         return reduceMotion
