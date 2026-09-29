@@ -11,7 +11,9 @@ merging it, correct the user-visible issues found in review:
   valid target load.
 - Strength history should show the true heaviest completed set, select and plot
   estimated 1RM with one consistent validity rule, and keep every completed-set
-  capsule accessible when there are many sets or large text.
+  capsule accessible when there are many sets or large text. Repeated entries
+  for the same exercise in one workout should all contribute; a different
+  exercise with the same name should remain separate when IDs are available.
 - The rest ring should start full for any configured duration, decline with
   elapsed time, remain stable through pause/restore, and account for +30-second
   extensions while preserving the existing restart duration. Restore the prior
@@ -19,6 +21,12 @@ merging it, correct the user-visible issues found in review:
 - Accent text and controls must remain readable in light and dark appearance.
   Neon fill/line accents can remain where contrast is sufficient. Decorative
   confetti and pulsing must respect Reduce Motion.
+- A plan may contain a weight larger than the wheel picker's usual range. The
+  plate calculator must reject non-finite or impractically large targets with a
+  clear message before allocating plate-search arrays, while preserving the
+  set's recorded weight. Ordinary targets, including 2,024 kg, still calculate.
+- Exercise progress should fetch completed sessions from SwiftData rather than
+  loading active and cancelled sessions before filtering them in the view.
 
 Tests should cover the numerical and persistence boundaries; UI tests or
 simulator inspection should cover actual swatch/control/overflow layouts and

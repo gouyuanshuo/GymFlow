@@ -195,7 +195,7 @@ private struct SelectedPlanCard: View {
                         .glow(color: GymTheme.volt, radius: 3)
                     Text("SELECTED WORKOUT")
                         .font(.caption2.weight(.heavy))
-                        .foregroundStyle(GymTheme.volt)
+                        .foregroundStyle(GymTheme.voltForeground)
                         .tracking(0.5)
                 }
                 Text(plan.name).font(.title2.bold())
@@ -218,7 +218,7 @@ private struct SelectedPlanCard: View {
         HStack(spacing: 12) {
             HStack(spacing: 6) {
                 Image(systemName: "figure.strengthtraining.traditional")
-                    .foregroundStyle(GymTheme.volt)
+                    .foregroundStyle(GymTheme.voltForeground)
                 Text("\(plan.exercises.count) exercises")
             }
             .font(.subheadline.weight(.medium))
@@ -256,7 +256,7 @@ private struct ActiveSessionCard: View {
                         .glow(color: GymTheme.volt, radius: 4)
                     Text("WORKOUT IN PROGRESS")
                         .font(.caption2.weight(.heavy))
-                        .foregroundStyle(GymTheme.volt)
+                        .foregroundStyle(GymTheme.voltForeground)
                         .tracking(0.5)
                 }
                 .padding(.horizontal, 8)

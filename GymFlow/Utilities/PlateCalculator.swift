@@ -10,9 +10,7 @@ struct OlympicPlate: Identifiable, Equatable, Hashable {
     var id: Double { weight }
 
     var displayName: String {
-        weight.truncatingRemainder(dividingBy: 1) == 0
-            ? String(format: "%.0f", weight)
-            : String(format: "%.2g", weight)
+        GymFlowFormatters.plateWeight(weight)
     }
 
     static let available: [OlympicPlate] = [
@@ -31,6 +29,7 @@ struct OlympicPlate: Identifiable, Equatable, Hashable {
 struct PlateLoadingResult: Equatable {
     let targetWeight: Double
     let barWeight: Double
+    let isSupported: Bool
     let weightPerSide: Double
     let platesPerSide: [(plate: OlympicPlate, count: Int)]
     let loadedSequence: [OlympicPlate]
@@ -40,22 +39,44 @@ struct PlateLoadingResult: Equatable {
     static func == (lhs: PlateLoadingResult, rhs: PlateLoadingResult) -> Bool {
         lhs.targetWeight == rhs.targetWeight &&
         lhs.barWeight == rhs.barWeight &&
+        lhs.isSupported == rhs.isSupported &&
         lhs.loadedSequence == rhs.loadedSequence
     }
 }
 
 /// Mathematical engine for calculating barbell plate loading.
 enum PlateCalculator {
+    /// Keeps the plate search and rendered plate count within a useful range.
+    static let maximumTargetWeight = 10_000.0
+
     /// Computes the optimal plates to load per side of a barbell.
     static func calculate(
         targetWeight: Double,
         barWeight: Double = 20.0,
         availablePlates: [OlympicPlate] = OlympicPlate.available
     ) -> PlateLoadingResult {
-        guard targetWeight > barWeight else {
+        guard targetWeight.isFinite,
+              barWeight.isFinite,
+              barWeight > 0,
+              barWeight <= Self.maximumTargetWeight,
+              targetWeight <= Self.maximumTargetWeight else {
             return PlateLoadingResult(
                 targetWeight: targetWeight,
                 barWeight: barWeight,
+                isSupported: false,
+                weightPerSide: 0,
+                platesPerSide: [],
+                loadedSequence: [],
+                loadedTotal: barWeight.isFinite ? max(0, barWeight) : 0,
+                remainder: 0
+            )
+        }
+
+        guard targetWeight > barWeight else {
+            return PlateLoadingResult(
+                targetWeight: barWeight,
+                barWeight: barWeight,
+                isSupported: true,
                 weightPerSide: 0,
                 platesPerSide: [],
                 loadedSequence: [],
@@ -64,26 +85,57 @@ enum PlateCalculator {
             )
         }
 
-        var neededPerSide = (targetWeight - barWeight) / 2.0
-        var counts: [(plate: OlympicPlate, count: Int)] = []
-        var sequence: [OlympicPlate] = []
+        let neededPerSide = (targetWeight - barWeight) / 2.0
+        let targetUnits = Int((neededPerSide * 4.0).rounded(.down))
+        let sortedPlates = availablePlates
+            .filter {
+                $0.weight.isFinite && $0.weight > 0
+                    && $0.weight <= Self.maximumTargetWeight
+                    && ($0.weight * 4.0).rounded() == $0.weight * 4.0
+            }
+            .sorted { $0.weight > $1.weight }
+        let plateUnits = sortedPlates.map { Int(($0.weight * 4.0).rounded()) }
 
-        // Sort descending by weight
-        let sortedPlates = availablePlates.sorted { $0.weight > $1.weight }
+        var minimumPlateCount = Array(repeating: Int.max, count: targetUnits + 1)
+        var lastPlateIndex = Array(repeating: -1, count: targetUnits + 1)
+        minimumPlateCount[0] = 0
 
-        for plate in sortedPlates {
-            if neededPerSide >= plate.weight - 0.001 {
-                let count = Int(neededPerSide / plate.weight)
-                if count > 0 {
-                    counts.append((plate: plate, count: count))
-                    for _ in 0..<count {
-                        sequence.append(plate)
+        if targetUnits > 0 {
+            for loadUnits in 1...targetUnits {
+                for plateIndex in sortedPlates.indices {
+                    let units = plateUnits[plateIndex]
+                    guard units <= loadUnits,
+                          minimumPlateCount[loadUnits - units] != Int.max else { continue }
+
+                    let count = minimumPlateCount[loadUnits - units] + 1
+                    if count < minimumPlateCount[loadUnits] {
+                        minimumPlateCount[loadUnits] = count
+                        lastPlateIndex[loadUnits] = plateIndex
                     }
-                    neededPerSide -= Double(count) * plate.weight
                 }
             }
         }
 
+        var loadedUnits = targetUnits
+        while loadedUnits > 0 && minimumPlateCount[loadedUnits] == Int.max {
+            loadedUnits -= 1
+        }
+
+        var plateCounts = Array(repeating: 0, count: sortedPlates.count)
+        var remainingUnits = loadedUnits
+        while remainingUnits > 0 {
+            let plateIndex = lastPlateIndex[remainingUnits]
+            guard plateIndex >= 0 else { break }
+            plateCounts[plateIndex] += 1
+            remainingUnits -= plateUnits[plateIndex]
+        }
+
+        let counts: [(plate: OlympicPlate, count: Int)] = sortedPlates.enumerated().compactMap {
+            index, plate in
+            let count = plateCounts[index]
+            return count > 0 ? (plate: plate, count: count) : nil
+        }
+        let sequence = counts.flatMap { Array(repeating: $0.plate, count: $0.count) }
         let loadedPerSide = sequence.reduce(0.0) { $0 + $1.weight }
         let totalLoaded = barWeight + (loadedPerSide * 2.0)
         let remainder = max(0, targetWeight - totalLoaded)
@@ -91,6 +143,7 @@ enum PlateCalculator {
         return PlateLoadingResult(
             targetWeight: targetWeight,
             barWeight: barWeight,
+            isSupported: true,
             weightPerSide: loadedPerSide,
             platesPerSide: counts,
             loadedSequence: sequence,

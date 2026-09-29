@@ -52,7 +52,10 @@ struct WorkoutHistoryDetailView: View {
                         Text("No completed sets").foregroundStyle(.secondary)
                     }
                     NavigationLink("View Exercise Progress") {
-                        ExerciseProgressView(exerciseName: exercise.exerciseNameSnapshot)
+                        ExerciseProgressView(
+                            exerciseID: exercise.exerciseID,
+                            exerciseName: exercise.exerciseNameSnapshot
+                        )
                     }
                 } header: {
                     Text(exercise.exerciseNameSnapshot)

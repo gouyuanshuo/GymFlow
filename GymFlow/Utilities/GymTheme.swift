@@ -14,6 +14,36 @@ enum GymTheme {
     /// Energetic Coral: Warm accent for intense effort or heavy working sets.
     static let coral = Color(red: 1.0, green: 0.35, blue: 0.25)
 
+    /// Adaptive accents for text, borders, and controls on system-colored surfaces.
+    static let voltForeground = foreground(
+        light: AccentForegroundPalette.voltLight,
+        dark: AccentForegroundPalette.voltDark
+    )
+    static let cyanForeground = foreground(
+        light: AccentForegroundPalette.cyanLight,
+        dark: AccentForegroundPalette.cyanDark
+    )
+    static let goldForeground = foreground(
+        light: AccentForegroundPalette.goldLight,
+        dark: AccentForegroundPalette.goldDark
+    )
+    static let coralForeground = foreground(
+        light: AccentForegroundPalette.coralLight,
+        dark: AccentForegroundPalette.coralDark
+    )
+
+    private static func foreground(light: AccentRGB, dark: AccentRGB) -> Color {
+        Color(uiColor: UIColor { traits in
+            let accent = traits.userInterfaceStyle == .dark ? dark : light
+            return UIColor(
+                red: accent.red,
+                green: accent.green,
+                blue: accent.blue,
+                alpha: 1
+            )
+        })
+    }
+
     // MARK: - Gradients
     static let voltGradient = LinearGradient(
         colors: [volt, Color(red: 0.55, green: 0.95, blue: 0.1)],

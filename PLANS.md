@@ -509,9 +509,26 @@ Acceptance: each selected exercise has a readable offline guide and other exerci
 - [x] Review the modernization branch for numerical correctness, accessibility, and integration risks.
 - [x] Document the verified findings and a test-first remediation plan.
 - [ ] Fix plate loading/labels and bar-switch target behavior.
+  - [x] Prove exact plate loading and label precision against the real calculator with standalone RED→GREEN tests.
+  - [x] Clamp bar switches, preserve unsupported non-finite targets, and add a typechecked bar-switch UI flow.
+  - [ ] Run the bar-switch UI and full iOS calculator tests/build.
 - [ ] Fix strength-chart metrics and keep long set histories reachable.
+  - [x] Share the e1RM policy, report true best weight, gather repeated exercise records by stable identity, and add a typechecked six-set scroll flow.
+  - [ ] Run the iOS history unit/UI tests and inspect scrolling on device.
 - [ ] Fix rest-ring duration, accessibility-size controls, and motion behavior.
+  - [x] Persist current interval duration through start, extension, pause, restart, migration, and legacy restore with standalone RED→GREEN tests.
+  - [x] Connect the ring fraction, restore accessibility-size controls/labels, and gate its animation for Reduce Motion.
+  - [ ] Verify timer controls and motion behavior on iOS at accessibility text sizes.
 - [ ] Use readable adaptive foreground accents and respect Reduce Motion in celebrations.
+  - [x] Add light/dark foreground roles and a static celebration under Reduce Motion; pass a portable contrast check.
+  - [ ] Inspect light/dark colors and celebration behavior on an iOS simulator or device.
+- [ ] Bound plate calculation and query only completed sessions in exercise progress.
+  - [x] Reject unsupported calculator input before allocation and show a recovery action without changing a set.
+  - [x] Filter progress sessions in SwiftData and preserve every matching completed set in a session.
+  - [ ] Run the native iOS calculator/history tests and build.
 - [ ] Run the full branch build, tests, semantic lint, and final review before integration.
+  - [x] Complete a fresh read-only review with no Critical or Important source findings.
+  - [x] Run semantic lint and `git diff --check` with zero semantic/whitespace findings.
+  - [ ] Run the native build, full unit/UI tests, and simulator visual acceptance when Xcode/CoreSimulator works.
 
 Acceptance: the UI/UX branch remains native and offline-first, reports truthful weights and timer progress, and is accessible in light/dark appearance and large text.

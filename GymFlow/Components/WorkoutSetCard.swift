@@ -53,20 +53,22 @@ struct WorkoutSetCard: View {
                         activePicker = .weight
                     }
 
-                    if set.weight >= 20 {
+                    if set.weight >= 20 || !set.weight.isFinite {
                         Button {
                             showsPlateCalculator = true
                         } label: {
                             Image(systemName: "circle.circle")
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(GymTheme.cyan)
+                                .foregroundStyle(GymTheme.cyanForeground)
                                 .frame(width: 36, height: 48)
                                 .background(Color(uiColor: .tertiarySystemFill))
                                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                         .padding(.top, 24)
                         .accessibilityLabel(
-                            "Plate calculator for \(GymFlowFormatters.weight(set.weight)) kg"
+                            set.weight.isFinite
+                                ? "Plate calculator for \(GymFlowFormatters.weight(set.weight)) kg"
+                                : "Plate calculator for invalid weight"
                         )
                     }
                 }

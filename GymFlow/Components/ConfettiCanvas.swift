@@ -15,6 +15,7 @@ private struct ConfettiParticle {
 
 /// GPU-accelerated 2D immediate-mode celebratory particle canvas.
 struct ConfettiCanvas: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var particles: [ConfettiParticle] = []
     @State private var startDate = Date()
     @State private var isActive = true
@@ -29,7 +30,19 @@ struct ConfettiCanvas: View {
 
     var body: some View {
         Group {
-            if !GymTheme.isRunningTests {
+            if reduceMotion {
+                HStack {
+                    Image(systemName: "sparkle")
+                    Spacer()
+                    Image(systemName: "sparkle")
+                }
+                .font(.title2)
+                .foregroundStyle(GymTheme.gold)
+                .padding(.horizontal, 48)
+                .padding(.top, 40)
+                .frame(maxHeight: .infinity, alignment: .top)
+                .accessibilityHidden(true)
+            } else if !GymTheme.isRunningTests {
                 TimelineView(.animation(paused: !isActive)) { timeline in
                     Canvas { context, _ in
                         let elapsed = timeline.date.timeIntervalSince(startDate)
@@ -65,12 +78,15 @@ struct ConfettiCanvas: View {
         .allowsHitTesting(false)
         .ignoresSafeArea()
         .onAppear {
-            guard !GymTheme.isRunningTests else { return }
+            guard !GymTheme.isRunningTests, !reduceMotion else { return }
             generateParticles()
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
                 isActive = false
             }
+        }
+        .onChange(of: reduceMotion) { _, shouldReduceMotion in
+            if shouldReduceMotion { isActive = false }
         }
     }
 

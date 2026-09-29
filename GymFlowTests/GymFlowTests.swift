@@ -383,6 +383,73 @@ struct GymFlowTests {
         #expect(restored.remainingSeconds == 50)
     }
 
+    @Test("Rest timer keeps the current interval separate from restart duration")
+    func restTimerIntervalDurationPersistence() {
+        let suiteName = "GymFlowTests.RestTimerInterval.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            Issue.record("Could not create isolated UserDefaults")
+            return
+        }
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let start = Date(timeIntervalSince1970: 1_000)
+        let prefix = "testTimerInterval"
+        let intervalKey = "\(prefix).intervalDuration"
+        let timer = RestTimerService(defaults: defaults, keyPrefix: prefix)
+        timer.start(duration: 30, now: start)
+        #expect(defaults.integer(forKey: intervalKey) == 30)
+        #expect(timer.progressFraction == 1)
+
+        timer.refresh(now: start.addingTimeInterval(15))
+        #expect(timer.remainingSeconds == 15)
+        #expect(defaults.integer(forKey: intervalKey) == 30)
+        #expect(timer.progressFraction == 0.5)
+
+        timer.addThirtySeconds(now: start.addingTimeInterval(15))
+        #expect(timer.remainingSeconds == 45)
+        #expect(defaults.integer(forKey: intervalKey) == 60)
+        #expect(timer.progressFraction == 0.75)
+
+        timer.pause(now: start.addingTimeInterval(15))
+        let restored = RestTimerService(defaults: defaults, keyPrefix: prefix)
+        #expect(restored.isPaused)
+        #expect(restored.remainingSeconds == 45)
+        #expect(defaults.integer(forKey: intervalKey) == 60)
+        #expect(restored.progressFraction == 0.75)
+
+        restored.restart(now: start.addingTimeInterval(20))
+        #expect(restored.remainingSeconds == 30)
+        #expect(defaults.integer(forKey: intervalKey) == 30)
+        #expect(restored.progressFraction == 1)
+
+        restored.start(duration: 180, now: start.addingTimeInterval(30))
+        #expect(defaults.integer(forKey: intervalKey) == 180)
+        #expect(restored.progressFraction == 1)
+        RestTimerService.clearPersistedState(defaults: defaults, keyPrefix: prefix)
+        #expect(defaults.object(forKey: intervalKey) == nil)
+    }
+
+    @Test("Legacy rest state restores a current interval from configured duration")
+    func restTimerLegacyIntervalFallback() {
+        let suiteName = "GymFlowTests.RestTimerLegacyInterval.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            Issue.record("Could not create isolated UserDefaults")
+            return
+        }
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let prefix = "legacyInterval"
+        defaults.set(90, forKey: "\(prefix).originalDuration")
+        defaults.set(40, forKey: "\(prefix).pausedRemaining")
+        defaults.set(true, forKey: "\(prefix).isPaused")
+
+        let restored = RestTimerService(defaults: defaults, keyPrefix: prefix)
+        #expect(restored.isPaused)
+        #expect(restored.remainingSeconds == 40)
+        #expect(defaults.integer(forKey: "\(prefix).intervalDuration") == 90)
+        #expect(abs(restored.progressFraction - (40.0 / 90.0)) < 0.000_01)
+    }
+
     @Test("Rest timer migrates an interrupted workout from the legacy storage key")
     func restTimerStorageMigration() {
         let suiteName = "GymFlowTests.RestTimerMigration.\(UUID().uuidString)"
@@ -406,6 +473,8 @@ struct GymFlowTests {
         #expect(restored.remainingSeconds == 70)
         #expect(defaults.object(forKey: "restTimer.pausedRemaining") == nil)
         #expect(defaults.integer(forKey: "restTimer.session-id.pausedRemaining") == 70)
+        #expect(defaults.object(forKey: "restTimer.intervalDuration") == nil)
+        #expect(defaults.integer(forKey: "restTimer.session-id.intervalDuration") == 90)
     }
 
     @Test("Complete Current Set persists one set and advances to the next set")

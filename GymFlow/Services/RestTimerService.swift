@@ -32,6 +32,7 @@ final class RestTimerService: ObservableObject {
     private var endDate: Date?
     private var pausedRemaining = 0
     private var originalDuration = 0
+    private var intervalDuration = 0
     private var timer: Timer?
     private let defaults: UserDefaults
     private let keyPrefix: String
@@ -40,6 +41,12 @@ final class RestTimerService: ObservableObject {
     private(set) var notificationSoundEnabled = true
     var onCompletion: (() -> Void)?
     var deadline: Date? { endDate }
+
+    /// Remaining fraction of the current rest interval, including any extensions.
+    var progressFraction: Double {
+        guard intervalDuration > 0 else { return 0 }
+        return min(1, max(0, Double(remainingSeconds) / Double(intervalDuration)))
+    }
 
     init(
         defaults: UserDefaults = .standard,
@@ -109,6 +116,7 @@ final class RestTimerService: ObservableObject {
             return
         }
         originalDuration = duration
+        intervalDuration = duration
         pausedRemaining = 0
         didComplete = false
         defaults.removeObject(forKey: key(.didComplete))
@@ -167,9 +175,11 @@ final class RestTimerService: ObservableObject {
             let extended = endDate.addingTimeInterval(TimeInterval(Self.extensionSeconds))
             self.endDate = extended
             remainingSeconds = Self.remaining(until: extended, now: now)
+            intervalDuration += Self.extensionSeconds
         } else if isPaused {
             pausedRemaining += Self.extensionSeconds
             remainingSeconds = pausedRemaining
+            intervalDuration += Self.extensionSeconds
         } else {
             originalDuration = max(Self.extensionSeconds, originalDuration + Self.extensionSeconds)
             start(duration: originalDuration, now: now)
@@ -234,6 +244,7 @@ final class RestTimerService: ObservableObject {
         timer = nil
         endDate = nil
         pausedRemaining = 0
+        intervalDuration = 0
         remainingSeconds = 0
         isRunning = false
         isPaused = false
@@ -269,17 +280,20 @@ final class RestTimerService: ObservableObject {
         defaults.set(endDate, forKey: key(.endDate))
         defaults.set(pausedRemaining, forKey: key(.pausedRemaining))
         defaults.set(originalDuration, forKey: key(.originalDuration))
+        defaults.set(intervalDuration, forKey: key(.intervalDuration))
         defaults.set(isPaused, forKey: key(.isPaused))
     }
 
     private func restore(now: Date = Date()) {
         originalDuration = defaults.integer(forKey: key(.originalDuration))
+        intervalDuration = defaults.integer(forKey: key(.intervalDuration))
         didComplete = defaults.bool(forKey: key(.didComplete))
 
         if defaults.bool(forKey: key(.isPaused)) {
             pausedRemaining = defaults.integer(forKey: key(.pausedRemaining))
             remainingSeconds = pausedRemaining
             isPaused = pausedRemaining > 0
+            restoreIntervalDuration(remaining: pausedRemaining)
             return
         }
 
@@ -293,8 +307,16 @@ final class RestTimerService: ObservableObject {
         endDate = storedEndDate
         remainingSeconds = remaining
         isRunning = true
+        restoreIntervalDuration(remaining: remaining)
         scheduleCompletionNotification()
         scheduleTimer()
+    }
+
+    private func restoreIntervalDuration(remaining: Int) {
+        let restored = max(intervalDuration, originalDuration, remaining)
+        guard restored > 0 else { return }
+        intervalDuration = restored
+        defaults.set(restored, forKey: key(.intervalDuration))
     }
 
     private func clearCountdownPersistence() {
