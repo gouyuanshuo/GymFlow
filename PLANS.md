@@ -503,3 +503,15 @@ Acceptance: a verified cloud-only song plays from Google Drive through the exist
 - [ ] Build, test, and inspect playback on simulator and iPhone.
 
 Acceptance: each selected exercise has a readable offline guide and other exercises remain unaffected.
+
+## UI/UX Modernization Hardening
+
+- [x] Review the modernization branch for numerical correctness, accessibility, and integration risks.
+- [x] Document the verified findings and a test-first remediation plan.
+- [ ] Fix plate loading/labels and bar-switch target behavior.
+- [ ] Fix strength-chart metrics and keep long set histories reachable.
+- [ ] Fix rest-ring duration, accessibility-size controls, and motion behavior.
+- [ ] Use readable adaptive foreground accents and respect Reduce Motion in celebrations.
+- [ ] Run the full branch build, tests, semantic lint, and final review before integration.
+
+Acceptance: the UI/UX branch remains native and offline-first, reports truthful weights and timer progress, and is accessible in light/dark appearance and large text.
