@@ -167,7 +167,7 @@ final class GymFlowUITests: XCTestCase {
         openActiveWorkout(in: app)
 
         let weightButton = app.buttons["set-1-weight-picker"]
-        scrollToElement(weightButton, in: app)
+        scrollToElement(weightButton, in: app, useMeasuredDrag: true)
         weightButton.tap()
         let weightWheel = app.pickerWheels.firstMatch
         XCTAssertTrue(weightWheel.waitForExistence(timeout: 5))
@@ -175,7 +175,7 @@ final class GymFlowUITests: XCTestCase {
         app.buttons["confirm-workout-value"].tap()
 
         let calculator = app.buttons["Plate calculator for 20 kg"]
-        scrollToElement(calculator, in: app)
+        scrollToElement(calculator, in: app, useMeasuredDrag: true)
         calculator.tap()
         XCTAssertTrue(app.navigationBars["Plate Calculator"].waitForExistence(timeout: 5))
 
@@ -269,7 +269,9 @@ final class GymFlowUITests: XCTestCase {
         XCTAssertTrue(setRow.frame.contains(sixthSet.frame), "The whole sixth set should be visible")
         keepScreenshot(named: "Exercise progress sixth completed set")
 
-        let chart = app.descendants(matching: .any)["strength-progression-chart"]
+        let chart = progressScroll.otherElements.matching(
+            identifier: "strength-progression-chart"
+        ).firstMatch
         scrollToVisible(
             chart, in: progressScroll,
             top: app.navigationBars.firstMatch.frame.maxY + 8,
@@ -728,7 +730,7 @@ final class GymFlowUITests: XCTestCase {
             bottom: settings.frame.maxY - 44,
             horizontalPosition: 0.97
         )
-        motion.staticTexts["Motion"].tap()
+        motion.buttons["MOTION_TITLE"].press(forDuration: 0.15)
         XCTAssertTrue(reduceMotion.waitForExistence(timeout: 5))
         return reduceMotion
     }
@@ -871,7 +873,10 @@ final class GymFlowUITests: XCTestCase {
             let distance = hasFrame
                 ? min(max(overflow + 12, 44), visibleHeight * 0.45)
                 : visibleHeight * 0.45
-            let startY = visibleTop + visibleHeight * (scrollUp ? 0.75 : 0.25)
+            // A medium sheet can expose a full-screen accessibility frame. Start
+            // near its visible bottom edge so the drag reaches its scroll content.
+            let edgeMargin = min(40, visibleHeight * 0.1)
+            let startY = visibleBottom - edgeMargin - (scrollUp ? 0 : distance)
             let origin = scrollView.coordinate(withNormalizedOffset: .zero)
             let start = origin.withOffset(CGVector(
                 dx: scrollView.frame.width * horizontalPosition,
@@ -929,13 +934,42 @@ final class GymFlowUITests: XCTestCase {
     }
 
     @MainActor
-    private func scrollToElement(_ element: XCUIElement, in app: XCUIApplication) {
+    private func scrollToElement(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        useMeasuredDrag: Bool = false
+    ) {
         let scrollView = app.scrollViews.firstMatch
         let visibleTop = app.frame.minY + 110
         let miniPlayer = app.otherElements["music-mini-player"]
         let navigationTop = app.buttons["Next Exercise"].frame.minY - 20
         let visibleBottom = miniPlayer.exists ? miniPlayer.frame.minY - 6 : navigationTop
-        scrollToVisible(element, in: scrollView, top: visibleTop, bottom: visibleBottom)
+        if useMeasuredDrag {
+            scrollToVisible(element, in: scrollView, top: visibleTop, bottom: visibleBottom)
+            return
+        }
+
+        // Fast swipes remain reliable while adding many large-text set cards.
+        var attempts = 0
+        while attempts < 20 {
+            guard element.exists else {
+                scrollView.swipeUp()
+                attempts += 1
+                continue
+            }
+            if element.frame.maxY > visibleBottom {
+                scrollView.swipeUp()
+            } else if element.frame.minY < visibleTop {
+                scrollView.swipeDown()
+            } else {
+                break
+            }
+            attempts += 1
+        }
+        XCTAssertTrue(element.exists)
+        XCTAssertTrue(element.isHittable)
+        XCTAssertGreaterThanOrEqual(element.frame.minY, visibleTop)
+        XCTAssertLessThanOrEqual(element.frame.maxY, visibleBottom)
     }
 
     @MainActor
