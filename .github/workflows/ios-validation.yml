@@ -1,0 +1,116 @@
+name: iOS validation
+
+on:
+  push:
+    branches: [main, feature/ui-ux-modernization]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      GYMFLOW_DERIVED_DATA: ${{ runner.temp }}/GymFlowDerivedData
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Inspect Xcode and select an available iPhone
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcrun simctl list devices available
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+
+          devices = json.loads(subprocess.check_output(
+              ['xcrun', 'simctl', 'list', 'devices', 'available', '--json']
+          ))['devices']
+          candidates = []
+          for runtime, runtime_devices in devices.items():
+              match = re.search(r'\.iOS-(\d+)-(\d+)', runtime)
+              if not match:
+                  continue
+              version = tuple(map(int, match.groups()))
+              for device in runtime_devices:
+                  if device.get('isAvailable') and device['name'].startswith('iPhone'):
+                      candidates.append((version, device['name'] == 'iPhone 17', device))
+          if not candidates:
+              raise SystemExit('No available iPhone simulator')
+          _, _, selected = max(candidates, key=lambda item: (item[0], item[1]))
+          with open(os.environ['GITHUB_ENV'], 'a') as environment:
+              environment.write('GYMFLOW_SIMULATOR_ID=' + selected['udid'] + '\n')
+          print('Selected ' + selected['name'] + ': ' + selected['udid'])
+          PY
+
+      - name: Lint semantic Swift rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun swift-format lint --recursive --parallel \
+            GymFlow GymFlowActivityShared GymFlowLiveActivityExtension GymFlowTests \
+            > "$RUNNER_TEMP/GymFlow-lint.log" 2>&1
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          layout_rules = {'AddLines', 'Indentation', 'LineLength', 'RemoveLine', 'Spacing', 'TrailingComma'}
+          log = (pathlib.Path(os.environ['RUNNER_TEMP']) / 'GymFlow-lint.log').read_text()
+          findings = []
+          for line in log.splitlines():
+              rule = re.search(r'warning: \[([^]]+)\]', line)
+              if 'error:' in line or ('warning:' in line and (not rule or rule[1] not in layout_rules)):
+                  findings.append(line)
+          if findings:
+              raise SystemExit('\n'.join(findings))
+          print('No semantic lint findings; layout warnings are retained in the artifact.')
+          PY
+
+      - name: Build for iOS Simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -project GymFlow.xcodeproj -scheme GymFlow \
+            -sdk iphonesimulator -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$GYMFLOW_DERIVED_DATA" \
+            CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/GymFlow-build.log"
+
+      - name: Run all unit and UI tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun simctl bootstatus "$GYMFLOW_SIMULATOR_ID" -b
+          xcodebuild -project GymFlow.xcodeproj -scheme GymFlow \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$GYMFLOW_SIMULATOR_ID" \
+            -derivedDataPath "$GYMFLOW_DERIVED_DATA" \
+            -resultBundlePath "$RUNNER_TEMP/GymFlowTests.xcresult" \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/GymFlow-tests.log"
+
+      - name: Preserve logs and test screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-validation-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/GymFlow-*.log
+            ${{ runner.temp }}/GymFlowTests.xcresult
+          retention-days: 7

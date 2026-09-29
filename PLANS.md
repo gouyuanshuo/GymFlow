@@ -530,5 +530,6 @@ Acceptance: each selected exercise has a readable offline guide and other exerci
   - [x] Complete a fresh read-only review with no Critical or Important source findings.
   - [x] Run semantic lint and `git diff --check` with zero semantic/whitespace findings.
   - [ ] Run the native build, full unit/UI tests, and simulator visual acceptance when Xcode/CoreSimulator works.
+  - [ ] Run the same native gate on GitHub's Mac runner while this command session cannot reach macOS services.
 
 Acceptance: the UI/UX branch remains native and offline-first, reports truthful weights and timer progress, and is accessible in light/dark appearance and large text.
