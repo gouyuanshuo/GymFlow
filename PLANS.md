@@ -514,6 +514,8 @@ Acceptance: each selected exercise has a readable offline guide and other exerci
   - [ ] Run the bar-switch UI and full iOS calculator tests/build.
 - [ ] Fix strength-chart metrics and keep long set histories reachable.
   - [x] Share the e1RM policy, report true best weight, gather repeated exercise records by stable identity, and add a typechecked six-set scroll flow.
+  - [x] Verify six distinct capsules and horizontal scrolling in the normal-text native UI run.
+  - [ ] Verify chart gestures allow vertical history scrolling and chart values remain readable at accessibility text sizes.
   - [ ] Run the iOS history unit/UI tests and inspect scrolling on device.
 - [ ] Fix rest-ring duration, accessibility-size controls, and motion behavior.
   - [x] Persist current interval duration through start, extension, pause, restart, migration, and legacy restore with standalone RED→GREEN tests.
@@ -530,7 +532,7 @@ Acceptance: each selected exercise has a readable offline guide and other exerci
   - [x] Complete a fresh read-only review with no Critical or Important source findings.
   - [x] Run semantic lint and `git diff --check` with zero semantic/whitespace findings.
   - [x] Pass the hosted generic simulator build and all 117 unit/render tests.
-  - [ ] Verify six distinct history capsules after correcting the UI test's child-element counting.
+  - [x] Verify six distinct history capsules after correcting the UI test's child-element counting (standard run 36546361016).
   - [ ] Run the native build, full unit/UI tests, and simulator visual acceptance when Xcode/CoreSimulator works.
   - [ ] Run the same native gate on GitHub's Mac runner while this command session cannot reach macOS services.
 
