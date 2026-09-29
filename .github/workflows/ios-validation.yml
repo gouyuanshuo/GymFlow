@@ -16,10 +16,30 @@ concurrency:
 
 jobs:
   build-and-test:
+    name: iOS (${{ matrix.suite }})
     runs-on: macos-26
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: standard
+            appearance: light
+            text_size: large
+          - suite: workout-flows
+            appearance: light
+            text_size: large
+          - suite: accessibility-light
+            appearance: light
+            text_size: accessibility-extra-large
+          - suite: accessibility-dark
+            appearance: dark
+            text_size: accessibility-extra-large
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      GYMFLOW_TEST_SUITE: ${{ matrix.suite }}
+      GYMFLOW_APPEARANCE: ${{ matrix.appearance }}
+      GYMFLOW_TEXT_SIZE: ${{ matrix.text_size }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -92,42 +112,50 @@ jobs:
             -derivedDataPath "$GYMFLOW_DERIVED_DATA" \
             CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/GymFlow-build.log"
 
-      - name: Run all unit and UI tests
-        timeout-minutes: 25
+      - name: Run assigned unit and UI tests
+        timeout-minutes: 35
         shell: bash
         run: |
           set -euo pipefail
           xcrun simctl bootstatus "$GYMFLOW_SIMULATOR_ID" -b
-          xcrun simctl ui "$GYMFLOW_SIMULATOR_ID" appearance light
-          xcrun simctl ui "$GYMFLOW_SIMULATOR_ID" content_size large
+          xcrun simctl ui "$GYMFLOW_SIMULATOR_ID" appearance "$GYMFLOW_APPEARANCE"
+          xcrun simctl ui "$GYMFLOW_SIMULATOR_ID" content_size "$GYMFLOW_TEXT_SIZE"
+          selection=()
+          workout_flows=(
+            testActiveWorkoutCardLayoutAndSetActions
+            testPhysicalActiveWorkoutPresentationWithExistingData
+            testWorkoutSharingFromCompletionAndHistory
+          )
+          case "$GYMFLOW_TEST_SUITE" in
+            standard)
+              # These three tests run in workout-flows; every other test, including new
+              # unit and UI tests, remains in this default partition.
+              for test in "${workout_flows[@]}"; do
+                selection+=("-skip-testing:GymFlowUITests/GymFlowUITests/$test")
+              done
+              ;;
+            workout-flows)
+              for test in "${workout_flows[@]}"; do
+                selection+=("-only-testing:GymFlowUITests/GymFlowUITests/$test")
+              done
+              ;;
+            accessibility-light|accessibility-dark)
+              selection+=(
+                -only-testing:GymFlowUITests/GymFlowUITests/testPlateCalculatorTargetFollowsSelectedBar
+                -only-testing:GymFlowUITests/GymFlowUITests/testCompletedSetHistoryCanScrollToSixthSet
+                -only-testing:GymFlowUITests/GymFlowUITests/testReducedMotionTimerAndCompletion
+              )
+              ;;
+            *) echo "Unknown test suite: $GYMFLOW_TEST_SUITE" >&2; exit 1 ;;
+          esac
           xcodebuild -project GymFlow.xcodeproj -scheme GymFlow \
             -configuration Debug \
             -destination "platform=iOS Simulator,id=$GYMFLOW_SIMULATOR_ID" \
             -derivedDataPath "$GYMFLOW_DERIVED_DATA" \
-            -resultBundlePath "$RUNNER_TEMP/GymFlowTests.xcresult" \
+            -resultBundlePath "$RUNNER_TEMP/GymFlow-$GYMFLOW_TEST_SUITE.xcresult" \
             -parallel-testing-enabled NO \
+            "${selection[@]}" \
             CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/GymFlow-tests.log"
-
-      - name: Inspect accessibility text in light and dark appearance
-        timeout-minutes: 15
-        shell: bash
-        run: |
-          set -euo pipefail
-          xcrun simctl ui "$GYMFLOW_SIMULATOR_ID" content_size accessibility-extra-large
-          for appearance in light dark; do
-            xcrun simctl ui "$GYMFLOW_SIMULATOR_ID" appearance "$appearance"
-            xcodebuild -project GymFlow.xcodeproj -scheme GymFlow \
-              -configuration Debug \
-              -destination "platform=iOS Simulator,id=$GYMFLOW_SIMULATOR_ID" \
-              -derivedDataPath "$GYMFLOW_DERIVED_DATA" \
-              -resultBundlePath "$RUNNER_TEMP/GymFlowAccessibility-$appearance.xcresult" \
-              -parallel-testing-enabled NO \
-              -only-testing:GymFlowUITests/GymFlowUITests/testPlateCalculatorTargetFollowsSelectedBar \
-              -only-testing:GymFlowUITests/GymFlowUITests/testCompletedSetHistoryCanScrollToSixthSet \
-              -only-testing:GymFlowUITests/GymFlowUITests/testReducedMotionTimerAndCompletion \
-              CODE_SIGNING_ALLOWED=NO test-without-building 2>&1 \
-              | tee "$RUNNER_TEMP/GymFlow-accessibility-$appearance.log"
-          done
 
       - name: Export screenshots for visual review
         if: always()
@@ -138,15 +166,17 @@ jobs:
           for result in "$RUNNER_TEMP"/GymFlow*.xcresult; do
             [[ -d "$result" ]] || continue
             result_name=${result##*/}
-            xcrun xcresulttool export attachments --path "$result" \
-              --output-path "$RUNNER_TEMP/GymFlow-screenshots/$result_name"
+            if ! xcrun xcresulttool export attachments --path "$result" \
+              --output-path "$RUNNER_TEMP/GymFlow-screenshots/$result_name"; then
+              echo "::warning::Could not export attachments from $result_name; preserving the raw bundle."
+            fi
           done
 
       - name: Preserve logs and test screenshots
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ios-validation-${{ github.sha }}
+          name: ios-validation-${{ matrix.suite }}-${{ github.sha }}
           path: |
             ${{ runner.temp }}/GymFlow-*.log
             ${{ runner.temp }}/GymFlow*.xcresult

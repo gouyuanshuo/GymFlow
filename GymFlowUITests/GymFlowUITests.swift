@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 
 final class GymFlowUITests: XCTestCase {
@@ -188,8 +189,7 @@ final class GymFlowUITests: XCTestCase {
             sheetScroll.swipeUp()
         }
         XCTAssertTrue(barSelector.isHittable)
-        barSelector.tap()
-        app.buttons["15 kg (Women's)"].tap()
+        selectBar("15 kg (Women's)", using: barSelector, in: app)
 
         let decrease = app.buttons["-5"]
         for _ in 0..<5 {
@@ -198,16 +198,15 @@ final class GymFlowUITests: XCTestCase {
         }
         XCTAssertTrue(decrease.isHittable)
         decrease.tap()
-        XCTAssertEqual(target.label, "15")
+        waitForLabel("15", on: target)
 
         for _ in 0..<5 {
             if barSelector.isHittable { break }
             sheetScroll.swipeUp()
         }
         XCTAssertTrue(barSelector.isHittable)
-        barSelector.tap()
-        app.buttons["20 kg (Olympic)"].tap()
-        XCTAssertEqual(target.label, "20")
+        selectBar("20 kg (Olympic)", using: barSelector, in: app)
+        waitForLabel("20", on: target)
         keepScreenshot(named: "Plate calculator after heavier bar selection")
 
         app.buttons["Done"].tap()
@@ -268,13 +267,15 @@ final class GymFlowUITests: XCTestCase {
         let capsules = setRow.descendants(matching: .any).matching(NSPredicate(
             format: "identifier BEGINSWITH 'history-set-'"
         ))
-        XCTAssertGreaterThanOrEqual(capsules.count, 6)
+        XCTAssertEqual(capsules.count, 6)
+        XCTAssertEqual(Set(capsules.allElementsBoundByIndex.map(\.identifier)).count, 6)
         let sixthSet = capsules.element(boundBy: 5)
         for _ in 0..<5 {
-            if sixthSet.isHittable { break }
+            if sixthSet.isHittable, setRow.frame.contains(sixthSet.frame) { break }
             setRow.swipeLeft()
         }
         XCTAssertTrue(sixthSet.isHittable)
+        XCTAssertTrue(setRow.frame.contains(sixthSet.frame), "The whole sixth set should be visible")
         keepScreenshot(named: "Exercise progress sixth completed set")
     }
 
@@ -500,15 +501,19 @@ final class GymFlowUITests: XCTestCase {
         let settingsTab = app.tabBars.buttons["Settings"]
         XCTAssertTrue(settingsTab.waitForExistence(timeout: 10))
         settingsTab.tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
         let exerciseLibrary = app.buttons["Exercise Library"]
         var settingsScrollAttempts = 0
-        while !exerciseLibrary.exists, settingsScrollAttempts < 4 {
+        while !exerciseLibrary.isHittable, settingsScrollAttempts < 4 {
             app.swipeUp()
             settingsScrollAttempts += 1
         }
         XCTAssertTrue(exerciseLibrary.waitForExistence(timeout: 5))
-        exerciseLibrary.tap()
+        XCTAssertTrue(exerciseLibrary.isHittable)
+        keepScreenshot(named: "Settings before opening Exercise Library")
+        exerciseLibrary.press(forDuration: 0.15)
         XCTAssertTrue(app.navigationBars["Exercise Library"].waitForExistence(timeout: 5))
+        keepScreenshot(named: "Exercise Library after opening")
 
         let search = app.searchFields["Exercise name"]
         XCTAssertTrue(search.waitForExistence(timeout: 5))
@@ -580,18 +585,11 @@ final class GymFlowUITests: XCTestCase {
             await MainActor.run {
                 app.terminate()
                 settings.activate()
-                XCTAssertTrue(reduceMotion.waitForExistence(timeout: 5))
-                if !wasEnabled, reduceMotion.value as? String == "1" {
-                    reduceMotion.tap()
-                }
-                XCTAssertEqual(reduceMotion.value as? String, wasEnabled ? "1" : "0")
+                self.setReduceMotion(wasEnabled, using: reduceMotion)
                 settings.terminate()
             }
         }
-        if !wasEnabled {
-            reduceMotion.tap()
-        }
-        XCTAssertEqual(reduceMotion.value as? String, "1")
+        setReduceMotion(true, using: reduceMotion)
         keepScreenshot(named: "Reduce Motion enabled in Settings")
         app.launch()
         if app.buttons["Resume Workout"].waitForExistence(timeout: 3) {
@@ -686,6 +684,57 @@ final class GymFlowUITests: XCTestCase {
         historyShare.tap()
         verifySharePreviewAndOpenActivitySheet(in: app, randomize: true)
         dismissActivitySheet(in: app)
+    }
+
+    @MainActor
+    private func selectBar(_ label: String, using picker: XCUIElement, in app: XCUIApplication) {
+        let option = app.descendants(matching: .any).matching(
+            NSPredicate(format: "label == %@", label)
+        ).firstMatch
+        picker.tap()
+        if !option.waitForExistence(timeout: 5) {
+            // The hosted simulator can dismiss the menu after a gesture timeout. Reopen once.
+            keepScreenshot(named: "Plate menu dismissed before selection")
+            picker.tap()
+        }
+        XCTAssertTrue(option.waitForExistence(timeout: 5))
+        XCTAssertTrue(option.isHittable)
+        option.tap()
+        let selectionChanged = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS %@", label),
+            object: picker
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [selectionChanged], timeout: 5), .completed)
+    }
+
+    @MainActor
+    private func waitForLabel(_ label: String, on element: XCUIElement) {
+        let changed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label == %@", label),
+            object: element
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed)
+    }
+
+    @MainActor
+    private func setReduceMotion(_ enabled: Bool, using toggle: XCUIElement) {
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        XCTAssertTrue(toggle.isHittable)
+        let expectedValue = enabled ? "1" : "0"
+        if toggle.value as? String != expectedValue {
+            // Settings exposes the entire row as the switch. Its center misses the control.
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        }
+        let switchChanged = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", expectedValue),
+            object: toggle
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [switchChanged], timeout: 5), .completed)
+        let systemSettingChanged = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in UIAccessibility.isReduceMotionEnabled == enabled },
+            object: nil
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [systemSettingChanged], timeout: 5), .completed)
     }
 
     @MainActor

@@ -119,6 +119,7 @@ struct ExerciseProgressView: View {
                         .padding(.vertical, 4)
                         .background(Color(uiColor: .tertiarySystemFill))
                         .clipShape(Capsule())
+                        .accessibilityElement(children: .combine)
                         .accessibilityIdentifier("history-set-\(set.id.uuidString)")
                     }
                 }
