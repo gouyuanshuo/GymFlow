@@ -21,6 +21,7 @@ enum RestTimerStorage {
         case endDate
         case pausedRemaining
         case originalDuration
+        case intervalDuration
         case isPaused
         case didComplete
 
@@ -28,7 +29,9 @@ enum RestTimerStorage {
         ///
         /// `didComplete` is deliberately excluded: it outlives the countdown so the completion
         /// banner still appears after the timer itself has been torn down.
-        static let countdown: [Field] = [.endDate, .pausedRemaining, .originalDuration, .isPaused]
+        static let countdown: [Field] = [
+            .endDate, .pausedRemaining, .originalDuration, .intervalDuration, .isPaused
+        ]
     }
 
     static func key(_ field: Field, prefix: String) -> String {

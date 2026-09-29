@@ -163,7 +163,7 @@ private struct WorkoutPersonalBestCelebration: View {
         .overlay(alignment: .topTrailing) {
             Image(systemName: "trophy.fill")
                 .font(.title2)
-                .foregroundStyle(GymTheme.gold.opacity(0.85))
+                .foregroundStyle(GymTheme.goldForeground)
                 .glow(color: GymTheme.gold, radius: 8)
                 .padding(18)
                 .accessibilityHidden(true)
@@ -181,7 +181,7 @@ struct SummaryMetric: View {
         VStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.headline)
-                .foregroundStyle(GymTheme.volt)
+                .foregroundStyle(GymTheme.voltForeground)
             Text(value)
                 .font(.title3.bold().monospacedDigit())
                 .minimumScaleFactor(0.7)

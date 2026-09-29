@@ -142,6 +142,8 @@ final class GymFlowUITests: XCTestCase {
         completeSet.tap()
         let restLabel = app.staticTexts["Rest"]
         XCTAssertTrue(restLabel.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Rest time remaining"].exists)
+        XCTAssertTrue(app.buttons["More timer options"].exists)
         let addThirtySeconds = app.buttons["+30 sec"]
         let skipRest = app.buttons["Skip Rest"]
         scrollToElement(skipRest, in: app)
@@ -155,6 +157,123 @@ final class GymFlowUITests: XCTestCase {
         keepScreenshot(named: "Active Workout rest timer")
 
         app.terminate()
+    }
+
+    @MainActor
+    func testPlateCalculatorTargetFollowsSelectedBar() throws {
+        let app = XCUIApplication()
+        app.launch()
+        openActiveWorkout(in: app)
+
+        let weightButton = app.buttons["set-1-weight-picker"]
+        scrollToElement(weightButton, in: app)
+        weightButton.tap()
+        let weightWheel = app.pickerWheels.firstMatch
+        XCTAssertTrue(weightWheel.waitForExistence(timeout: 5))
+        weightWheel.adjust(toPickerWheelValue: "20")
+        app.buttons["confirm-workout-value"].tap()
+
+        let calculator = app.buttons["Plate calculator for 20 kg"]
+        scrollToElement(calculator, in: app)
+        calculator.tap()
+        XCTAssertTrue(app.navigationBars["Plate Calculator"].waitForExistence(timeout: 5))
+
+        let target = app.staticTexts["plate-target-weight"]
+        let barSelector = app.descendants(matching: .any)["plate-bar-weight-picker"]
+        let sheetScroll = app.scrollViews["plate-calculator-scroll"]
+        XCTAssertEqual(target.label, "20")
+
+        for _ in 0..<5 {
+            if barSelector.isHittable { break }
+            sheetScroll.swipeUp()
+        }
+        XCTAssertTrue(barSelector.isHittable)
+        barSelector.tap()
+        app.buttons["15 kg (Women's)"].tap()
+
+        let decrease = app.buttons["-5"]
+        for _ in 0..<5 {
+            if decrease.isHittable { break }
+            sheetScroll.swipeDown()
+        }
+        XCTAssertTrue(decrease.isHittable)
+        decrease.tap()
+        XCTAssertEqual(target.label, "15")
+
+        for _ in 0..<5 {
+            if barSelector.isHittable { break }
+            sheetScroll.swipeUp()
+        }
+        XCTAssertTrue(barSelector.isHittable)
+        barSelector.tap()
+        app.buttons["20 kg (Olympic)"].tap()
+        XCTAssertEqual(target.label, "20")
+
+        app.buttons["Done"].tap()
+        cancelActiveWorkout(in: app)
+    }
+
+    @MainActor
+    func testCompletedSetHistoryCanScrollToSixthSet() throws {
+        let app = XCUIApplication()
+        app.launch()
+        if app.buttons["Resume Workout"].waitForExistence(timeout: 3) {
+            app.buttons["Resume Workout"].tap()
+            cancelActiveWorkout(in: app)
+        }
+        openActiveWorkout(in: app)
+
+        let setCards = app.otherElements.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'workout-set-card-'")
+        )
+        if setCards.count < 6 {
+            for number in (setCards.count + 1)...6 {
+                addSet(number: number, in: app)
+            }
+        }
+        for number in 1...6 {
+            let complete = app.buttons["Complete set \(number)"]
+            scrollToElement(complete, in: app)
+            complete.tap()
+        }
+
+        app.buttons["Finish"].tap()
+        let confirmFinish = app.buttons["Finish Workout"].firstMatch
+        XCTAssertTrue(confirmFinish.waitForExistence(timeout: 5))
+        confirmFinish.tap()
+        XCTAssertTrue(app.staticTexts["Workout Complete"].waitForExistence(timeout: 10))
+        let saveAndReturn = app.buttons["Save and Return to Today"]
+        scrollToHittable(saveAndReturn, in: app)
+        saveAndReturn.tap()
+
+        app.tabBars.buttons["History"].tap()
+        let latestWorkout = app.buttons.matching(identifier: "history-workout-row").firstMatch
+        XCTAssertTrue(latestWorkout.waitForExistence(timeout: 5))
+        latestWorkout.tap()
+        let viewProgress = app.buttons["View Exercise Progress"].firstMatch
+        scrollToHittable(viewProgress, in: app)
+        viewProgress.tap()
+
+        let setRow = app.scrollViews.matching(NSPredicate(
+            format: "identifier BEGINSWITH 'completed-sets-scroll-'"
+        )).firstMatch
+        XCTAssertTrue(setRow.waitForExistence(timeout: 5))
+        let progressScroll = app.scrollViews["exercise-progress-scroll"]
+        for _ in 0..<5 {
+            if setRow.isHittable { break }
+            progressScroll.swipeUp()
+        }
+        XCTAssertTrue(setRow.isHittable)
+        let capsules = setRow.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier BEGINSWITH 'history-set-'"
+        ))
+        XCTAssertGreaterThanOrEqual(capsules.count, 6)
+        let sixthSet = capsules.element(boundBy: 5)
+        for _ in 0..<5 {
+            if sixthSet.isHittable { break }
+            setRow.swipeLeft()
+        }
+        XCTAssertTrue(sixthSet.isHittable)
     }
 
     @MainActor

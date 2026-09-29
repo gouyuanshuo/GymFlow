@@ -14,6 +14,7 @@ struct PlateCalculatorTests {
 
         let underResult = PlateCalculator.calculate(targetWeight: 15.0, barWeight: 20.0)
         #expect(underResult.platesPerSide.isEmpty)
+        #expect(underResult.targetWeight == 20.0)
         #expect(underResult.loadedTotal == 20.0)
     }
 
@@ -48,5 +49,63 @@ struct PlateCalculatorTests {
         #expect(result.loadedTotal == 65.0)
         #expect(result.remainder == 0.0)
         #expect(result.loadedSequence.map(\.weight) == [25.0])
+    }
+
+    @Test("Exact load beats a greedy plate choice")
+    func testExactTwentyFourKilograms() {
+        let result = PlateCalculator.calculate(targetWeight: 24.0, barWeight: 20.0)
+
+        #expect(result.loadedSequence.map(\.weight) == [0.5, 0.5, 0.5, 0.5])
+        #expect(result.weightPerSide == 2.0)
+        #expect(result.loadedTotal == 24.0)
+        #expect(result.remainder == 0.0)
+    }
+
+    @Test("Large exact targets do not fall back to a greedy remainder")
+    func testLargeExactTarget() {
+        let result = PlateCalculator.calculate(targetWeight: 2_024.0, barWeight: 20.0)
+
+        #expect(result.loadedTotal == 2_024.0)
+        #expect(result.remainder == 0.0)
+        #expect(result.loadedSequence.count == 44)
+        #expect(result.loadedSequence.suffix(4).map(\.weight) == [0.5, 0.5, 0.5, 0.5])
+    }
+
+    @Test("Plate labels preserve significant hundredths")
+    func testStandardPlateLabels() {
+        #expect(
+            OlympicPlate.available.map(\.displayName)
+                == ["25", "20", "15", "10", "5", "2.5", "1.25", "0.5"]
+        )
+    }
+
+    @Test("The plate display keeps quarter-kilogram values")
+    func testPrecisePlateWeightDisplay() {
+        let exact = PlateCalculator.calculate(targetWeight: 22.5, barWeight: 20)
+        let remainder = PlateCalculator.calculate(targetWeight: 22.75, barWeight: 20)
+
+        #expect(exact.weightPerSide == 1.25)
+        #expect(GymFlowFormatters.plateWeight(exact.weightPerSide) == "1.25")
+        #expect(remainder.remainder == 0.25)
+        #expect(GymFlowFormatters.plateWeight(remainder.remainder) == "0.25")
+    }
+
+    @Test("The calculator never loads more than the target")
+    func testNearQuarterUnitDoesNotOvershoot() {
+        let target = 20.999_999_999_5
+        let result = PlateCalculator.calculate(targetWeight: target, barWeight: 20)
+
+        #expect(result.loadedTotal <= target)
+        #expect(result.loadedSequence.isEmpty)
+    }
+
+    @Test("Targets outside the calculator range do not allocate plate sequences")
+    func testUnsupportedTarget() {
+        for target in [10_001.0, 1_000_000_000.0, .infinity, .nan] {
+            let result = PlateCalculator.calculate(targetWeight: target, barWeight: 20)
+            #expect(!result.isSupported)
+            #expect(result.loadedSequence.isEmpty)
+            #expect(result.loadedTotal == 20)
+        }
     }
 }

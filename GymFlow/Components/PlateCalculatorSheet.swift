@@ -3,30 +3,47 @@ import SwiftUI
 /// Modern visual barbell plate calculator sheet.
 struct PlateCalculatorSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var targetWeight: Double
     @State private var barWeight: Double = 20.0
 
     init(initialWeight: Double) {
-        _targetWeight = State(initialValue: max(20.0, initialWeight))
-    }
-
-    private var result: PlateLoadingResult {
-        PlateCalculator.calculate(targetWeight: targetWeight, barWeight: barWeight)
+        _targetWeight = State(
+            initialValue: initialWeight.isFinite ? max(20.0, initialWeight) : initialWeight
+        )
     }
 
     var body: some View {
+        let result = PlateCalculator.calculate(targetWeight: targetWeight, barWeight: barWeight)
+
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    weightHeader
-                    barbellVisual
-                    plateBreakdown
-                    quickAdjustments
-                    barSelector
+                    if result.isSupported {
+                        weightHeader(result)
+                        barbellVisual(result)
+                        plateBreakdown(result)
+                        quickAdjustments
+                        barSelector
+                    } else {
+                        ContentUnavailableView(
+                            "Target Out of Range",
+                            systemImage: "scalemass",
+                            description: Text(
+                                "The plate calculator supports finite targets up to 10,000 kg. Your workout weight has not changed."
+                            )
+                        )
+                        Button("Use 20 kg in Calculator") {
+                            targetWeight = 20
+                            barWeight = 20
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
             }
+            .accessibilityIdentifier("plate-calculator-scroll")
             .navigationTitle("Plate Calculator")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -42,7 +59,7 @@ struct PlateCalculatorSheet: View {
 
     // MARK: - Subviews
 
-    private var weightHeader: some View {
+    private func weightHeader(_ result: PlateLoadingResult) -> some View {
         VStack(spacing: 4) {
             Text("TARGET WEIGHT")
                 .font(.caption.weight(.bold))
@@ -50,9 +67,10 @@ struct PlateCalculatorSheet: View {
                 .tracking(1)
 
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(GymFlowFormatters.weight(targetWeight))
+                Text(GymFlowFormatters.plateWeight(targetWeight))
                     .font(.system(size: 44, weight: .heavy, design: .rounded).monospacedDigit())
                     .foregroundStyle(.primary)
+                    .accessibilityIdentifier("plate-target-weight")
 
                 Text("kg")
                     .font(.title2.weight(.bold))
@@ -60,20 +78,20 @@ struct PlateCalculatorSheet: View {
             }
 
             if result.remainder > 0 {
-                Text("(\(GymFlowFormatters.weight(result.remainder)) kg remainder with available plates)")
+                Text("(\(GymFlowFormatters.plateWeight(result.remainder)) kg remainder with available plates)")
                     .font(.caption)
-                    .foregroundStyle(GymTheme.coral)
+                    .foregroundStyle(GymTheme.coralForeground)
             } else {
-                Text("Each side: \(GymFlowFormatters.weight(result.weightPerSide)) kg")
+                Text("Each side: \(GymFlowFormatters.plateWeight(result.weightPerSide)) kg")
                     .font(.subheadline.weight(.medium))
-                    .foregroundStyle(GymTheme.volt)
+                    .foregroundStyle(GymTheme.voltForeground)
             }
         }
         .padding(.vertical, 8)
     }
 
     /// Renders a graphical Olympic barbell sleeve with color-coded bumper plates.
-    private var barbellVisual: some View {
+    private func barbellVisual(_ result: PlateLoadingResult) -> some View {
         VStack(spacing: 8) {
             ZStack(alignment: .leading) {
                 // Barbell Shaft & Sleeve
@@ -114,11 +132,14 @@ struct PlateCalculatorSheet: View {
             }
             .frame(height: 120)
             .gymGlassCard()
-            .animation(.spring(response: 0.35, dampingFraction: 0.75), value: result.loadedSequence)
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.75),
+                value: result.loadedSequence
+            )
         }
     }
 
-    private var plateBreakdown: some View {
+    private func plateBreakdown(_ result: PlateLoadingResult) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Plates Per Side", systemImage: "circle.circle")
                 .font(.headline)
@@ -163,14 +184,18 @@ struct PlateCalculatorSheet: View {
     private func adjustButton(amount: Double) -> some View {
         Button {
             let next = max(barWeight, targetWeight + amount)
-            withAnimation(.snappy) { targetWeight = next }
+            if reduceMotion {
+                targetWeight = next
+            } else {
+                withAnimation(.snappy) { targetWeight = next }
+            }
         } label: {
             Text(amount > 0 ? "+\(GymFlowFormatters.weight(amount))" : GymFlowFormatters.weight(amount))
                 .font(.subheadline.weight(.bold).monospacedDigit())
                 .frame(maxWidth: .infinity, minHeight: 40)
         }
         .buttonStyle(.bordered)
-        .tint(amount > 0 ? GymTheme.volt : .secondary)
+        .tint(amount > 0 ? GymTheme.voltForeground : .secondary)
     }
 
     private var barSelector: some View {
@@ -187,6 +212,10 @@ struct PlateCalculatorSheet: View {
                 Text("10 kg (Technique)").tag(10.0)
             }
             .pickerStyle(.menu)
+            .accessibilityIdentifier("plate-bar-weight-picker")
+            .onChange(of: barWeight) { _, selectedBarWeight in
+                targetWeight = max(targetWeight, selectedBarWeight)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

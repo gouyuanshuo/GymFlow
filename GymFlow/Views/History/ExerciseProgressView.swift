@@ -2,36 +2,39 @@ import SwiftData
 import SwiftUI
 
 struct ExerciseProgressView: View {
-    @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
+    private typealias HistoryEntry = (session: WorkoutSession, sets: [WorkoutSetRecord])
+
+    @Query(
+        filter: WorkoutSession.predicate(status: .completed),
+        sort: \WorkoutSession.startedAt,
+        order: .reverse
+    )
+    private var sessions: [WorkoutSession]
+    let exerciseID: UUID?
     let exerciseName: String
 
-    private var history: [(session: WorkoutSession, record: ExerciseRecord)] {
-        sessions.compactMap { session in
-            guard session.status == .completed,
-                let record = session.orderedExerciseRecords.first(where: {
-                    $0.exerciseNameSnapshot == exerciseName
-                        && $0.orderedSets.contains(where: \.isCompleted)
-                })
-            else { return nil }
-            return (session, record)
+    private var history: [HistoryEntry] {
+        let identity = ExerciseIdentity(id: exerciseID, name: exerciseName)
+        return sessions.compactMap { session in
+            let sets = ExerciseProgressHistory.completedSets(matching: identity, in: session)
+            return sets.isEmpty ? nil : (session, sets)
         }
     }
 
-    private var chartDataPoints: [StrengthDataPoint] {
+    private func chartDataPoints(from history: [HistoryEntry]) -> [StrengthDataPoint] {
         // Chronological order (oldest to newest) for chart left-to-right progression
         history.reversed().compactMap { item in
-            let completed = item.record.orderedSets.filter(\.isCompleted)
-            guard let bestSet = completed.max(by: { a, b in
-                let e1RMA = (a.weight > 0 && a.repetitions > 0)
-                    ? a.weight * (1.0 + Double(a.repetitions) / 30.0) : a.weight
-                let e1RMB = (b.weight > 0 && b.repetitions > 0)
-                    ? b.weight * (1.0 + Double(b.repetitions) / 30.0) : b.weight
-                return e1RMA < e1RMB
-            }) else { return nil }
+            let metrics = item.sets.map {
+                StrengthSetMetrics(weight: $0.weight, repetitions: $0.repetitions)
+            }
+            guard let bestSet = StrengthProgressionMetrics.strongestSet(in: metrics) else {
+                return nil
+            }
 
-            let volume = completed.reduce(0.0) { $0 + ($1.weight * Double($1.repetitions)) }
+            let volume = item.sets.reduce(0.0) { $0 + ($1.weight * Double($1.repetitions)) }
 
             return StrengthDataPoint(
+                id: item.session.id,
                 date: item.session.startedAt,
                 weight: bestSet.weight,
                 repetitions: bestSet.repetitions,
@@ -41,28 +44,37 @@ struct ExerciseProgressView: View {
         }
     }
 
-    private var bestWeight: Double {
-        history.flatMap { $0.record.orderedSets }.filter(\.isCompleted).map(\.weight).max() ?? 0
+    private func bestWeight(in history: [HistoryEntry]) -> Double {
+        let metrics = history.flatMap { item in
+            item.sets.map {
+                StrengthSetMetrics(weight: $0.weight, repetitions: $0.repetitions)
+            }
+        }
+        return StrengthProgressionMetrics.bestWeight(in: metrics)
     }
 
     var body: some View {
+        let completedHistory = history
+        let points = chartDataPoints(from: completedHistory)
+        let heaviestWeight = bestWeight(in: completedHistory)
+
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 // Interactive Strength Chart
-                StrengthProgressionChart(dataPoints: chartDataPoints)
+                StrengthProgressionChart(dataPoints: points, bestWeight: heaviestWeight)
 
                 // Recent Sessions Breakdown
                 VStack(alignment: .leading, spacing: 14) {
                     Label("Recent Sessions", systemImage: "clock.arrow.circlepath")
                         .font(.headline)
 
-                    if history.isEmpty {
+                    if completedHistory.isEmpty {
                         Text("Complete this exercise in a workout to see history.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 8)
                     } else {
-                        ForEach(history.prefix(20), id: \.session.id) { item in
+                        ForEach(completedHistory.prefix(20), id: \.session.id) { item in
                             sessionHistoryRow(item)
                         }
                     }
@@ -72,11 +84,12 @@ struct ExerciseProgressView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
+        .accessibilityIdentifier("exercise-progress-scroll")
         .navigationTitle(exerciseName)
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func sessionHistoryRow(_ item: (session: WorkoutSession, record: ExerciseRecord)) -> some View {
+    private func sessionHistoryRow(_ item: HistoryEntry) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(item.session.startedAt, format: .dateTime.month(.abbreviated).day().year())
@@ -89,25 +102,29 @@ struct ExerciseProgressView: View {
                     .foregroundStyle(.secondary)
             }
 
-            // Sets horizontal flow
-            HStack(spacing: 8) {
-                let completedSets = item.record.orderedSets.filter(\.isCompleted)
-                ForEach(Array(completedSets.enumerated()), id: \.offset) { _, set in
-                    HStack(spacing: 3) {
-                        Text("\(GymFlowFormatters.weight(set.weight))kg")
-                            .font(.caption.weight(.bold).monospacedDigit())
-                        Text("×")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.secondary)
-                        Text("\(set.repetitions)")
-                            .font(.caption.weight(.medium).monospacedDigit())
+            // Keep every completed set reachable without shrinking its text.
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(item.sets, id: \.id) { set in
+                        HStack(spacing: 3) {
+                            Text("\(GymFlowFormatters.weight(set.weight))kg")
+                                .font(.caption.weight(.bold).monospacedDigit())
+                            Text("×")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.secondary)
+                            Text("\(set.repetitions)")
+                                .font(.caption.weight(.medium).monospacedDigit())
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color(uiColor: .tertiarySystemFill))
+                        .clipShape(Capsule())
+                        .accessibilityIdentifier("history-set-\(set.id.uuidString)")
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color(uiColor: .tertiarySystemFill))
-                    .clipShape(Capsule())
                 }
             }
+            .accessibilityIdentifier("completed-sets-scroll-\(item.session.id.uuidString)")
+            .accessibilityLabel("Completed sets")
         }
         .padding(.vertical, 4)
     }

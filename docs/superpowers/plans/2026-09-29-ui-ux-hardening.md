@@ -25,13 +25,15 @@
 - A session with 100 kg × 1 and 90 kg × 10 must report a 100 kg best weight even if e1RM chooses the other set.
 - A legacy persisted rest state lacks any new interval-duration field: restore a valid ring and preserve the old restart duration.
 - Accessibility text and Reduce Motion must not hide controls or start repeating decoration.
+- A very large or non-finite plan weight must not make the plate calculator allocate without bound or change the logged set.
+- A large history with active and cancelled sessions should query only completed sessions for exercise progress.
 
 ---
 
 ### Task 1: Exact plate loading and truthful labels
 
 **Files:**
-- Modify: `GymFlow/Utilities/PlateCalculator.swift`, `GymFlow/Components/PlateCalculatorSheet.swift`
+- Modify: `GymFlow/Utilities/PlateCalculator.swift`, `GymFlow/Utilities/Formatters.swift`, `GymFlow/Components/PlateCalculatorSheet.swift`, `GymFlow/Components/WorkoutSetCard.swift`
 - Test: `GymFlowTests/PlateCalculatorTests.swift`
 
 **Interfaces:**
@@ -45,15 +47,16 @@
 ### Task 2: Truthful strength metrics and accessible set history
 
 **Files:**
-- Modify: `GymFlow/Components/StrengthProgressionChart.swift`, `GymFlow/Views/History/ExerciseProgressView.swift`
-- Test: new `GymFlowTests/StrengthProgressionTests.swift`; modify `GymFlowUITests/GymFlowUITests.swift`
+- Modify: `GymFlow/Components/StrengthProgressionChart.swift`, `GymFlow/Views/History/ExerciseProgressView.swift`, `GymFlow/Views/History/WorkoutHistoryDetailView.swift`
+- Add: `GymFlow/Utilities/StrengthProgressionMetrics.swift`, `GymFlow/Utilities/ExerciseProgressHistory.swift`
+- Test: new `GymFlowTests/StrengthProgressionTests.swift` and `GymFlowTests/ExerciseProgressHistoryTests.swift`; modify `GymFlowUITests/GymFlowUITests.swift`
 
 **Interfaces:**
 - Consumes: `ExerciseProgressView.bestWeight`, completed set snapshots, `StrengthDataPoint`.
-- Produces: `StrengthProgressionChart(dataPoints:bestWeight:)`, one shared e1RM calculation used for point selection and plotting, a horizontally scrollable recent-set row with stable accessibility identifiers.
+- Produces: `StrengthProgressionChart(dataPoints:bestWeight:)`, one shared e1RM calculation used for point selection and plotting, a horizontally scrollable recent-set row with stable accessibility identifiers, and ID-first aggregation of repeated exercise records within each completed session.
 
 - [ ] **Step 1: RED tests.** A session with `100 × 1` and `90 × 10` selects the higher valid e1RM point but reports best weight `100`; a `50 × 40` set cannot beat a valid `70 × 5` point by applying an unsupported high-rep formula. Add a UI flow with at least six completed sets and assert the last set capsule becomes reachable by horizontal scrolling. Run the relevant focused unit/UI tests and observe the expected failures.
-- [ ] **Step 2: GREEN implementation.** Pass `bestWeight` separately to the chart; extract and use one e1RM policy (matching the existing `StrengthDataPoint` 1–30 rep rule); wrap set capsules in an explicitly labelled horizontal `ScrollView` with stable per-set identifiers.
+- [ ] **Step 2: GREEN implementation.** Pass `bestWeight` separately to the chart; extract and use one e1RM policy (matching the existing `StrengthDataPoint` 1–30 rep rule); wrap set capsules in an explicitly labelled horizontal `ScrollView` with stable per-set identifiers. Carry the selected exercise ID into progress and gather all matching completed sets, using the existing legacy name fallback.
 - [ ] **Step 3: Verify.** Run focused tests, full unit suite, generic simulator build, and semantic lint; record commands/outcomes and commit.
 
 ### Task 3: Stable rest-ring progress and accessible controls
@@ -85,7 +88,22 @@
 - [ ] **Step 2: GREEN implementation.** Add dynamic foreground colors, use them only where the accent is text/outline/control tint on adaptive surfaces, and keep the neon fills/gradients where dark text or a dark surface provides contrast. Gate confetti timeline/haptic and ring pulse by `accessibilityReduceMotion`.
 - [ ] **Step 3: Verify.** Run focused/full tests, generic simulator build, semantic lint, and visual inspection in light/dark and accessibility text sizes. Record exact outcomes and commit.
 
-### Task 5: Branch-wide gate
+### Task 5: Bounded plate calculation and completed-only history query
+
+**Files:**
+- Modify: `GymFlow/Utilities/PlateCalculator.swift`, `GymFlow/Components/PlateCalculatorSheet.swift`, `GymFlow/Views/History/ExerciseProgressView.swift`
+- Test: `GymFlowTests/PlateCalculatorTests.swift`
+
+**Interfaces:**
+- Consumes: `PlateCalculator.calculate(targetWeight:barWeight:availablePlates:)` and `WorkoutSession.predicate(status:)`.
+- Produces: an explicit unsupported result for non-finite or over-limit plate targets; the sheet explains the limit without changing set data. The progress query fetches only completed sessions.
+
+- [ ] **Step 1: RED tests.** Add literal assertions that a 2,024 kg target still loads exactly, while a one-billion-kilogram target and infinity report unsupported without constructing a plate sequence. Run the focused calculator tests or an executable standalone harness against the real calculator source and observe the unsupported assertions fail.
+- [ ] **Step 2: GREEN implementation.** Add a documented 10,000 kg calculator ceiling and an `isSupported` flag on `PlateLoadingResult`. Return early for non-finite or over-limit inputs before integer conversion or allocation. In the sheet, show the supported range when the result is unsupported and leave the workout set untouched.
+- [ ] **Step 3: Store filter.** Use `WorkoutSession.predicate(status: .completed)` in `ExerciseProgressView`'s `@Query`; remove redundant in-view status filtering. Type-check the app sources and verify the existing completed-session query pattern is preserved.
+- [ ] **Step 4: Verify.** Run focused/full tests, generic simulator build, and semantic lint. Record commands/outcomes and commit when the build/test gate can run.
+
+### Task 6: Branch-wide gate
 
 **Files:**
 - Modify: `PLANS.md`, `PROGRESS.md`

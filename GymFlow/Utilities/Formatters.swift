@@ -14,6 +14,11 @@ enum GymFlowFormatters {
         value.formatted(.number.precision(.fractionLength(0...1)))
     }
 
+    /// Plate loading can use quarter-kilogram values even when logged weights use tenths.
+    static func plateWeight(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(0...2)))
+    }
+
     /// The canonical one-line description of a logged set.
     ///
     /// Bodyweight sets (no weight) read as "12 reps" rather than "0 kg × 12". Every screen that

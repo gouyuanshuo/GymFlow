@@ -25,16 +25,17 @@ struct StrengthDataPoint: Identifiable, Equatable {
         self.repetitions = repetitions
         self.totalVolume = totalVolume
         self.sessionName = sessionName
-        // Epley Formula for 1RM: weight * (1 + reps / 30)
-        self.estimated1RM = (weight > 0 && repetitions > 0 && repetitions <= 30)
-            ? weight * (1.0 + Double(repetitions) / 30.0)
-            : weight
+        self.estimated1RM = StrengthSetMetrics(
+            weight: weight,
+            repetitions: repetitions
+        ).estimatedOneRepMax
     }
 }
 
 /// Interactive strength progression chart powered by Apple's native Charts framework.
 struct StrengthProgressionChart: View {
     let dataPoints: [StrengthDataPoint]
+    let bestWeight: Double
     @State private var selectedPoint: StrengthDataPoint?
 
     var body: some View {
@@ -54,6 +55,11 @@ struct StrengthProgressionChart: View {
             }
         }
         .gymGlassCard()
+        .onChange(of: dataPoints) { _, points in
+            if let selectedPoint {
+                self.selectedPoint = points.first { $0.id == selectedPoint.id }
+            }
+        }
     }
 
     // MARK: - Subviews
@@ -70,7 +76,7 @@ struct StrengthProgressionChart: View {
                     HStack(spacing: 8) {
                         Text("\(GymFlowFormatters.weight(selected.estimated1RM)) kg e1RM")
                             .font(.title3.bold().monospacedDigit())
-                            .foregroundStyle(GymTheme.volt)
+                            .foregroundStyle(GymTheme.voltForeground)
 
                         Text("(\(GymFlowFormatters.weight(selected.weight)) kg × \(selected.repetitions))")
                             .font(.subheadline)
@@ -80,14 +86,14 @@ struct StrengthProgressionChart: View {
                     HStack(spacing: 8) {
                         Text("\(GymFlowFormatters.weight(latest.estimated1RM)) kg e1RM")
                             .font(.title3.bold().monospacedDigit())
-                            .foregroundStyle(GymTheme.volt)
+                            .foregroundStyle(GymTheme.voltForeground)
 
                         Text("Latest")
                             .font(.caption.weight(.semibold))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(GymTheme.volt.opacity(0.15))
-                            .foregroundStyle(GymTheme.volt)
+                            .foregroundStyle(GymTheme.voltForeground)
                             .clipShape(Capsule())
                     }
                 }
@@ -127,7 +133,7 @@ struct StrengthProgressionChart: View {
                     x: .value("Date", point.date),
                     y: .value("Estimated 1RM", point.estimated1RM)
                 )
-                .foregroundStyle(GymTheme.volt)
+                .foregroundStyle(GymTheme.voltForeground)
                 .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
                 .interpolationMethod(.catmullRom)
 
@@ -136,7 +142,7 @@ struct StrengthProgressionChart: View {
                     x: .value("Date", point.date),
                     y: .value("Estimated 1RM", point.estimated1RM)
                 )
-                .foregroundStyle(GymTheme.volt)
+                .foregroundStyle(GymTheme.voltForeground)
                 .symbolSize(point.id == selectedPoint?.id ? 80 : 36)
             }
 
@@ -202,23 +208,23 @@ struct StrengthProgressionChart: View {
         HStack(spacing: 12) {
             statTile(
                 title: "BEST WEIGHT",
-                value: "\(GymFlowFormatters.weight(dataPoints.map(\.weight).max() ?? 0)) kg",
+                value: "\(GymFlowFormatters.weight(bestWeight)) kg",
                 icon: "scalemass.fill",
-                color: GymTheme.cyan
+                color: GymTheme.cyanForeground
             )
 
             statTile(
                 title: "MAX e1RM",
                 value: "\(GymFlowFormatters.weight(dataPoints.map(\.estimated1RM).max() ?? 0)) kg",
                 icon: "trophy.fill",
-                color: GymTheme.gold
+                color: GymTheme.goldForeground
             )
 
             statTile(
                 title: "SESSIONS",
                 value: "\(dataPoints.count)",
                 icon: "calendar",
-                color: GymTheme.volt
+                color: GymTheme.voltForeground
             )
         }
     }
