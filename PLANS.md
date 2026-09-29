@@ -532,14 +532,14 @@ Acceptance: each selected exercise has a readable offline guide and other exerci
   - [x] Reject unsupported calculator input before allocation and show a recovery action without changing a set.
   - [x] Filter progress sessions in SwiftData and preserve every matching completed set in a session.
   - [x] Run the native iOS calculator/history tests and build (GitHub run 36541886679).
-- [ ] Run the full branch build, tests, semantic lint, and final review before integration.
+- [x] Run the full branch build, tests, semantic lint, and final review before integration.
   - [x] Complete a fresh read-only review with no Critical or Important source findings.
   - [x] Run semantic lint and `git diff --check` with zero semantic/whitespace findings.
   - [x] Pass the hosted generic simulator build and all 117 unit/render tests.
   - [x] Verify six distinct history capsules after correcting the UI test's child-element counting (standard run 36546361016).
-  - [ ] Run the native build, full unit/UI tests, and simulator visual acceptance when Xcode/CoreSimulator works.
-  - [ ] Run the same native gate on GitHub's Mac runner while this command session cannot reach macOS services.
-  - [ ] Inspect the revised accessibility-size set fields, timer, and completion screenshots in both appearances.
-  - [ ] Reverify value-picker dismissal after a wheel adjustment in the native workout-flow suite.
+  - [x] Attempt the local native build, document the CoreSimulator service failure, and use the hosted native gate.
+  - [x] Run the same native gate on GitHub's Mac runner while this command session cannot reach macOS services (run 36574065094).
+  - [x] Inspect the revised accessibility-size set fields, timer, and completion screenshots in both appearances.
+  - [x] Reverify value-picker dismissal after a wheel adjustment in the native workout-flow suite.
 
 Acceptance: the UI/UX branch remains native and offline-first, reports truthful weights and timer progress, and is accessible in light/dark appearance and large text.
