@@ -97,11 +97,13 @@ struct RestTimerRingCard: View {
                         GymFlowFormatters.duration(TimeInterval(timer.remainingSeconds))
                     )
 
-                Text("REST REMAINING")
-                    .font(.caption2.weight(.bold))
-                    .tracking(1)
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
+                if !dynamicTypeSize.isAccessibilitySize {
+                    Text("REST REMAINING")
+                        .font(.caption2.weight(.bold))
+                        .tracking(1)
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
             }
         }
         .frame(

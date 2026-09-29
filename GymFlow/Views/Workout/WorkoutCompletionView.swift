@@ -2,6 +2,7 @@ import SwiftData
 import SwiftUI
 
 struct WorkoutCompletionView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.modelContext) private var modelContext
     /// Personal bests are judged against finished workouts only, so the store filters them here
     /// instead of handing this screen every session ever recorded.
@@ -40,7 +41,7 @@ struct WorkoutCompletionView: View {
                             Text(session.planNameSnapshot).font(.title3).foregroundStyle(.secondary)
                         }
 
-                        LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 12) {
+                        LazyVGrid(columns: metricColumns, spacing: 12) {
                             SummaryMetric(title: "Duration", value: GymFlowFormatters.duration(session.duration), icon: "clock")
                             SummaryMetric(title: "Exercises", value: "\(totals.exerciseCount)", icon: "dumbbell")
                             SummaryMetric(title: "Sets", value: "\(totals.setCount)", icon: "checklist")
@@ -102,6 +103,12 @@ struct WorkoutCompletionView: View {
                 )
             }
         }
+    }
+
+    private var metricColumns: [GridItem] {
+        dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible())]
+            : [GridItem(.flexible()), GridItem(.flexible())]
     }
 
     private func prepareShare() {
