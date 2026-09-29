@@ -79,32 +79,32 @@ final class GymFlowUITests: XCTestCase {
         let weightWheel = app.pickerWheels.firstMatch
         XCTAssertTrue(weightWheel.waitForExistence(timeout: 5))
         weightWheel.adjust(toPickerWheelValue: "72.5")
-        app.buttons["cancel-workout-value"].tap()
+        dismissWorkoutValuePicker(using: "cancel-workout-value", in: app)
         XCTAssertEqual(weightButton.value as? String, initialWeight)
 
         weightButton.tap()
         XCTAssertTrue(weightWheel.waitForExistence(timeout: 5))
         weightWheel.adjust(toPickerWheelValue: "72.5")
-        app.buttons["confirm-workout-value"].tap()
+        dismissWorkoutValuePicker(using: "confirm-workout-value", in: app)
         XCTAssertEqual(weightButton.value as? String, "72.5 kilograms")
 
         weightButton.tap()
         XCTAssertTrue(weightWheel.waitForExistence(timeout: 5))
         XCTAssertEqual(weightWheel.value as? String, "72.5")
-        app.buttons["cancel-workout-value"].tap()
+        dismissWorkoutValuePicker(using: "cancel-workout-value", in: app)
 
         let repetitionsButton = app.buttons["set-1-repetitions-picker"]
         repetitionsButton.tap()
         let repetitionsWheel = app.pickerWheels.firstMatch
         XCTAssertTrue(repetitionsWheel.waitForExistence(timeout: 5))
         repetitionsWheel.adjust(toPickerWheelValue: "10")
-        app.buttons["confirm-workout-value"].tap()
+        dismissWorkoutValuePicker(using: "confirm-workout-value", in: app)
         XCTAssertEqual(repetitionsButton.value as? String, "10 repetitions")
 
         repetitionsButton.tap()
         XCTAssertTrue(repetitionsWheel.waitForExistence(timeout: 5))
         repetitionsWheel.adjust(toPickerWheelValue: "11")
-        app.buttons["cancel-workout-value"].tap()
+        dismissWorkoutValuePicker(using: "cancel-workout-value", in: app)
         XCTAssertEqual(repetitionsButton.value as? String, "10 repetitions")
         keepScreenshot(named: "Active Workout set card")
 
@@ -174,7 +174,7 @@ final class GymFlowUITests: XCTestCase {
         if weightWheel.value as? String != "20" {
             weightWheel.adjust(toPickerWheelValue: "20")
         }
-        app.buttons["confirm-workout-value"].tap()
+        dismissWorkoutValuePicker(using: "confirm-workout-value", in: app)
 
         let calculator = app.otherElements["workout-set-card-1"]
             .buttons["set-1-plate-calculator"]
@@ -329,14 +329,14 @@ final class GymFlowUITests: XCTestCase {
         XCTAssertTrue(weightWheel.waitForExistence(timeout: 5))
         XCTAssertEqual(app.keyboards.count, 0)
         if hadExistingSession {
-            app.buttons["cancel-workout-value"].tap()
+            dismissWorkoutValuePicker(using: "cancel-workout-value", in: app)
             app.buttons["set-1-repetitions-picker"].tap()
             XCTAssertTrue(app.pickerWheels.firstMatch.waitForExistence(timeout: 5))
             XCTAssertEqual(app.keyboards.count, 0)
-            app.buttons["cancel-workout-value"].tap()
+            dismissWorkoutValuePicker(using: "cancel-workout-value", in: app)
         } else {
             weightWheel.adjust(toPickerWheelValue: "72.5")
-            app.buttons["confirm-workout-value"].tap()
+            dismissWorkoutValuePicker(using: "confirm-workout-value", in: app)
             XCTAssertEqual(weightButton.value as? String, "72.5 kilograms")
 
             let repetitionsButton = app.buttons["set-1-repetitions-picker"]
@@ -344,13 +344,13 @@ final class GymFlowUITests: XCTestCase {
             let repetitionsWheel = app.pickerWheels.firstMatch
             XCTAssertTrue(repetitionsWheel.waitForExistence(timeout: 5))
             repetitionsWheel.adjust(toPickerWheelValue: "10")
-            app.buttons["confirm-workout-value"].tap()
+            dismissWorkoutValuePicker(using: "confirm-workout-value", in: app)
             XCTAssertEqual(repetitionsButton.value as? String, "10 repetitions")
 
             repetitionsButton.tap()
             XCTAssertTrue(repetitionsWheel.waitForExistence(timeout: 5))
             repetitionsWheel.adjust(toPickerWheelValue: "11")
-            app.buttons["cancel-workout-value"].tap()
+            dismissWorkoutValuePicker(using: "cancel-workout-value", in: app)
             XCTAssertEqual(repetitionsButton.value as? String, "10 repetitions")
         }
 
@@ -612,17 +612,25 @@ final class GymFlowUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments.append("-GymFlowReduceMotionUITest")
         app.launch()
-        runReducedMotionTimerAndCompletion(in: app)
+        runReducedMotionTimerAndCompletion(in: app, captureSetFields: true)
     }
 
     @MainActor
-    private func runReducedMotionTimerAndCompletion(in app: XCUIApplication) {
+    private func runReducedMotionTimerAndCompletion(
+        in app: XCUIApplication,
+        captureSetFields: Bool = false
+    ) {
         if app.buttons["Resume Workout"].waitForExistence(timeout: 3) {
             app.buttons["Resume Workout"].tap()
             cancelActiveWorkout(in: app)
         }
         openActiveWorkout(in: app)
         keepScreenshot(named: "Reduced Motion active workout")
+        if captureSetFields {
+            let repetitions = app.buttons["set-1-repetitions-picker"]
+            scrollToElement(repetitions, in: app, useMeasuredDrag: true)
+            keepScreenshot(named: "Large-text workout set values")
+        }
         let completeSet = app.buttons["Complete set 1"]
         XCTAssertTrue(completeSet.waitForExistence(timeout: 10))
         scrollToElement(completeSet, in: app)
@@ -813,6 +821,23 @@ final class GymFlowUITests: XCTestCase {
             object: toggle
         )
         XCTAssertEqual(XCTWaiter.wait(for: [switchChanged], timeout: 5), .completed)
+    }
+
+    @MainActor
+    private func dismissWorkoutValuePicker(using identifier: String, in app: XCUIApplication) {
+        let sheet = app.otherElements["workout-value-picker-sheet"]
+        XCTAssertTrue(sheet.waitForExistence(timeout: 5))
+        for _ in 0..<3 {
+            let control = app.buttons[identifier]
+            XCTAssertTrue(control.waitForExistence(timeout: 3))
+            control.tap()
+            let dismissed = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "exists == false"),
+                object: sheet
+            )
+            if XCTWaiter.wait(for: [dismissed], timeout: 5) == .completed { return }
+        }
+        XCTFail("Value picker should close after \(identifier)")
     }
 
     @MainActor
