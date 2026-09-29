@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Modern visual barbell plate calculator sheet.
 struct PlateCalculatorSheet: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var targetWeight: Double
@@ -199,12 +200,15 @@ struct PlateCalculatorSheet: View {
     }
 
     private var barSelector: some View {
-        HStack {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout())
+        return layout {
             Text("Barbell Weight")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            Spacer()
+            if !dynamicTypeSize.isAccessibilitySize { Spacer() }
 
             Picker("Barbell Weight", selection: $barWeight) {
                 Text("20 kg (Olympic)").tag(20.0)
@@ -212,6 +216,7 @@ struct PlateCalculatorSheet: View {
                 Text("10 kg (Technique)").tag(10.0)
             }
             .pickerStyle(.menu)
+            .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("plate-bar-weight-picker")
             .onChange(of: barWeight) { _, selectedBarWeight in
                 targetWeight = max(targetWeight, selectedBarWeight)

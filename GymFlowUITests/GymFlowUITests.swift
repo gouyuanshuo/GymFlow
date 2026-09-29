@@ -184,27 +184,27 @@ final class GymFlowUITests: XCTestCase {
         let sheetScroll = app.scrollViews["plate-calculator-scroll"]
         XCTAssertEqual(target.label, "20")
 
-        for _ in 0..<5 {
-            if barSelector.isHittable { break }
-            sheetScroll.swipeUp()
-        }
-        XCTAssertTrue(barSelector.isHittable)
+        scrollToVisible(
+            barSelector, in: sheetScroll,
+            top: app.navigationBars["Plate Calculator"].frame.maxY + 8,
+            bottom: min(sheetScroll.frame.maxY, app.frame.maxY - 44)
+        )
         selectBar("15 kg (Women's)", using: barSelector, in: app)
 
         let decrease = app.buttons["-5"]
-        for _ in 0..<5 {
-            if decrease.isHittable { break }
-            sheetScroll.swipeDown()
-        }
-        XCTAssertTrue(decrease.isHittable)
+        scrollToVisible(
+            decrease, in: sheetScroll,
+            top: app.navigationBars["Plate Calculator"].frame.maxY + 8,
+            bottom: min(sheetScroll.frame.maxY, app.frame.maxY - 44)
+        )
         decrease.tap()
         waitForLabel("15", on: target)
 
-        for _ in 0..<5 {
-            if barSelector.isHittable { break }
-            sheetScroll.swipeUp()
-        }
-        XCTAssertTrue(barSelector.isHittable)
+        scrollToVisible(
+            barSelector, in: sheetScroll,
+            top: app.navigationBars["Plate Calculator"].frame.maxY + 8,
+            bottom: min(sheetScroll.frame.maxY, app.frame.maxY - 44)
+        )
         selectBar("20 kg (Olympic)", using: barSelector, in: app)
         waitForLabel("20", on: target)
         keepScreenshot(named: "Plate calculator after heavier bar selection")
@@ -259,11 +259,13 @@ final class GymFlowUITests: XCTestCase {
         )).firstMatch
         XCTAssertTrue(setRow.waitForExistence(timeout: 5))
         let progressScroll = app.scrollViews["exercise-progress-scroll"]
+        keepScreenshot(named: "Exercise progress chart before scrolling")
         for _ in 0..<5 {
             if setRow.isHittable { break }
             progressScroll.swipeUp()
         }
         XCTAssertTrue(setRow.isHittable)
+        XCTAssertFalse(app.buttons["Reset"].exists, "Scrolling should not select a chart point")
         let capsules = setRow.descendants(matching: .any).matching(NSPredicate(
             format: "identifier BEGINSWITH 'history-set-'"
         ))
@@ -564,28 +566,15 @@ final class GymFlowUITests: XCTestCase {
     func testReducedMotionTimerAndCompletion() throws {
         let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
         settings.launch()
-        let reduceMotion = settings.switches["Reduce Motion"]
-        if !reduceMotion.waitForExistence(timeout: 2) {
-            let accessibility = settings.staticTexts["Accessibility"].firstMatch
-            var attempts = 0
-            while !accessibility.isHittable, attempts < 8 {
-                settings.swipeUp()
-                attempts += 1
-            }
-            XCTAssertTrue(accessibility.isHittable)
-            accessibility.tap()
-            let motion = settings.staticTexts["Motion"].firstMatch
-            XCTAssertTrue(motion.waitForExistence(timeout: 5))
-            motion.tap()
-        }
-        XCTAssertTrue(reduceMotion.waitForExistence(timeout: 5))
+        let reduceMotion = openReduceMotionSettings(in: settings)
         let wasEnabled = reduceMotion.value as? String == "1"
         let app = XCUIApplication()
         addTeardownBlock {
             await MainActor.run {
                 app.terminate()
                 settings.activate()
-                self.setReduceMotion(wasEnabled, using: reduceMotion)
+                let restoredSwitch = self.openReduceMotionSettings(in: settings)
+                self.setReduceMotion(wasEnabled, using: restoredSwitch)
                 settings.terminate()
             }
         }
@@ -691,11 +680,17 @@ final class GymFlowUITests: XCTestCase {
         let option = app.descendants(matching: .any).matching(
             NSPredicate(format: "label == %@", label)
         ).firstMatch
-        picker.tap()
+        picker.press(forDuration: 0.15)
         if !option.waitForExistence(timeout: 5) {
             // The hosted simulator can dismiss the menu after a gesture timeout. Reopen once.
             keepScreenshot(named: "Plate menu dismissed before selection")
-            picker.tap()
+            let sheetScroll = app.scrollViews["plate-calculator-scroll"]
+            scrollToVisible(
+                picker, in: sheetScroll,
+                top: app.navigationBars["Plate Calculator"].frame.maxY + 8,
+                bottom: min(sheetScroll.frame.maxY, app.frame.maxY - 44)
+            )
+            picker.press(forDuration: 0.15)
         }
         XCTAssertTrue(option.waitForExistence(timeout: 5))
         XCTAssertTrue(option.isHittable)
@@ -714,6 +709,38 @@ final class GymFlowUITests: XCTestCase {
             object: element
         )
         XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed)
+    }
+
+    @MainActor
+    private func openReduceMotionSettings(in settings: XCUIApplication) -> XCUIElement {
+        let reduceMotion = settings.switches["Reduce Motion"]
+        if reduceMotion.waitForExistence(timeout: 2) { return reduceMotion }
+
+        if !settings.navigationBars["Accessibility"].exists {
+            let accessibility = settings.buttons["com.apple.settings.accessibility"]
+            let search = settings.searchFields.firstMatch
+            scrollToVisible(
+                accessibility, in: settings.collectionViews.firstMatch,
+                top: settings.navigationBars.firstMatch.frame.maxY + 8,
+                bottom: search.exists
+                    ? min(settings.frame.maxY - 44, search.frame.minY - 8)
+                    : settings.frame.maxY - 44
+            )
+            accessibility.tap()
+            XCTAssertTrue(settings.navigationBars["Accessibility"].waitForExistence(timeout: 5))
+        }
+        let accessibilityTable = settings.tables.firstMatch
+        let motion = accessibilityTable.cells.containing(
+            .staticText, identifier: "Motion"
+        ).firstMatch
+        scrollToVisible(
+            motion, in: accessibilityTable,
+            top: settings.navigationBars.firstMatch.frame.maxY + 8,
+            bottom: settings.frame.maxY - 44
+        )
+        motion.tap()
+        XCTAssertTrue(reduceMotion.waitForExistence(timeout: 5))
+        return reduceMotion
     }
 
     @MainActor
@@ -780,12 +807,13 @@ final class GymFlowUITests: XCTestCase {
         XCTAssertTrue(manualBackground.waitForExistence(timeout: 5))
         XCTAssertNotEqual(manualBackground.identifier, initialBackground)
         let previewScroll = app.scrollViews["workout-share-preview-scroll"]
-        var previewScrollAttempts = 0
-        while !manualBackground.isHittable, previewScrollAttempts < 6 {
-            previewScroll.swipeUp()
-            previewScrollAttempts += 1
-        }
-        XCTAssertTrue(manualBackground.isHittable)
+        let shareButton = app.buttons["share-workout-image"]
+        scrollToVisible(
+            manualBackground,
+            in: previewScroll,
+            top: app.navigationBars["Share Preview"].frame.maxY + 8,
+            bottom: shareButton.frame.minY - 8
+        )
         let manuallySelectedIdentifier = manualBackground.identifier
         manualBackground.tap()
         let selectedManualBackground = app.buttons.matching(NSPredicate(
@@ -828,6 +856,29 @@ final class GymFlowUITests: XCTestCase {
             app.swipeDown()
         }
         XCTAssertTrue(app.navigationBars["Share Preview"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    private func scrollToVisible(
+        _ element: XCUIElement,
+        in scrollView: XCUIElement,
+        top: @autoclosure () -> CGFloat,
+        bottom: @autoclosure () -> CGFloat
+    ) {
+        // iOS can report an element as hittable when only a clipped edge is exposed.
+        for _ in 0..<10 {
+            if !element.exists || element.frame.maxY > bottom() {
+                scrollView.swipeUp()
+            } else if element.frame.minY < top() {
+                scrollView.swipeDown()
+            } else {
+                break
+            }
+        }
+        XCTAssertTrue(element.exists)
+        XCTAssertTrue(element.isHittable)
+        XCTAssertGreaterThanOrEqual(element.frame.minY, top())
+        XCTAssertLessThanOrEqual(element.frame.maxY, bottom())
     }
 
     @MainActor

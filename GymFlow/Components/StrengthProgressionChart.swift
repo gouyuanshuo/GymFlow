@@ -34,6 +34,7 @@ struct StrengthDataPoint: Identifiable, Equatable {
 
 /// Interactive strength progression chart powered by Apple's native Charts framework.
 struct StrengthProgressionChart: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let dataPoints: [StrengthDataPoint]
     let bestWeight: Double
     @State private var selectedPoint: StrengthDataPoint?
@@ -64,8 +65,14 @@ struct StrengthProgressionChart: View {
 
     // MARK: - Subviews
 
+    private var rowLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(spacing: 8))
+    }
+
     private var chartHeader: some View {
-        HStack {
+        rowLayout {
             VStack(alignment: .leading, spacing: 2) {
                 Text("STRENGTH PROGRESSION")
                     .font(.caption.weight(.bold))
@@ -73,7 +80,7 @@ struct StrengthProgressionChart: View {
                     .foregroundStyle(.secondary)
 
                 if let selected = selectedPoint {
-                    HStack(spacing: 8) {
+                    rowLayout {
                         Text("\(GymFlowFormatters.weight(selected.estimated1RM)) kg e1RM")
                             .font(.title3.bold().monospacedDigit())
                             .foregroundStyle(GymTheme.voltForeground)
@@ -83,7 +90,7 @@ struct StrengthProgressionChart: View {
                             .foregroundStyle(.secondary)
                     }
                 } else if let latest = dataPoints.last {
-                    HStack(spacing: 8) {
+                    rowLayout {
                         Text("\(GymFlowFormatters.weight(latest.estimated1RM)) kg e1RM")
                             .font(.title3.bold().monospacedDigit())
                             .foregroundStyle(GymTheme.voltForeground)
@@ -99,7 +106,7 @@ struct StrengthProgressionChart: View {
                 }
             }
 
-            Spacer()
+            if !dynamicTypeSize.isAccessibilitySize { Spacer() }
 
             if selectedPoint != nil {
                 Button("Reset") {
@@ -109,6 +116,7 @@ struct StrengthProgressionChart: View {
                 .buttonStyle(.bordered)
             }
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var interactiveChart: some View {
@@ -186,18 +194,27 @@ struct StrengthProgressionChart: View {
         }
         .chartOverlay { proxy in
             GeometryReader { geometry in
+                let selectPoint: (CGPoint) -> Void = { location in
+                    guard let plotFrame = proxy.plotFrame else { return }
+                    let xPosition = location.x - geometry[plotFrame].origin.x
+                    if let date: Date = proxy.value(atX: xPosition) {
+                        findClosestPoint(to: date)
+                    }
+                }
                 Rectangle()
                     .fill(Color.clear)
                     .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
+                    // Allow the surrounding history to scroll when a swipe starts on the chart.
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 10)
                             .onChanged { value in
-                                guard let plotFrame = proxy.plotFrame else { return }
-                                let xPosition = value.location.x - geometry[plotFrame].origin.x
-                                if let date: Date = proxy.value(atX: xPosition) {
-                                    findClosestPoint(to: date)
-                                }
+                                guard abs(value.translation.width) > abs(value.translation.height)
+                                else { return }
+                                selectPoint(value.location)
                             }
+                    )
+                    .simultaneousGesture(
+                        SpatialTapGesture().onEnded { selectPoint($0.location) }
                     )
             }
         }
@@ -205,7 +222,7 @@ struct StrengthProgressionChart: View {
     }
 
     private var statMetricsRow: some View {
-        HStack(spacing: 12) {
+        rowLayout {
             statTile(
                 title: "BEST WEIGHT",
                 value: "\(GymFlowFormatters.weight(bestWeight)) kg",
@@ -232,13 +249,14 @@ struct StrengthProgressionChart: View {
     private func statTile(title: String, value: String, icon: String, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Label(title, systemImage: icon)
-                .font(.system(size: 9, weight: .bold))
+                .font(.caption2.weight(.bold))
                 .foregroundStyle(color)
 
             Text(value)
                 .font(.subheadline.weight(.bold).monospacedDigit())
                 .foregroundStyle(.primary)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(uiColor: .tertiarySystemFill))
