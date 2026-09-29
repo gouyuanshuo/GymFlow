@@ -508,14 +508,14 @@ Acceptance: each selected exercise has a readable offline guide and other exerci
 
 - [x] Review the modernization branch for numerical correctness, accessibility, and integration risks.
 - [x] Document the verified findings and a test-first remediation plan.
-- [ ] Fix plate loading/labels and bar-switch target behavior.
+- [x] Fix plate loading/labels and bar-switch target behavior.
   - [x] Prove exact plate loading and label precision against the real calculator with standalone RED→GREEN tests.
   - [x] Clamp bar switches, preserve unsupported non-finite targets, and add a typechecked bar-switch UI flow.
   - [x] Run the bar-switch UI and full iOS calculator tests/build (hosted run 36559493891).
 - [ ] Fix strength-chart metrics and keep long set histories reachable.
   - [x] Share the e1RM policy, report true best weight, gather repeated exercise records by stable identity, and add a typechecked six-set scroll flow.
   - [x] Verify six distinct capsules and horizontal scrolling in the normal-text native UI run.
-  - [ ] Verify chart gestures allow vertical history scrolling and chart values remain readable at accessibility text sizes.
+  - [x] Verify chart gestures allow vertical history scrolling and chart values remain readable at accessibility text sizes (hosted run 36562309029, light and dark).
   - [ ] Run the iOS history unit/UI tests and inspect scrolling on device.
 - [ ] Fix rest-ring duration, accessibility-size controls, and motion behavior.
   - [x] Persist current interval duration through start, extension, pause, restart, migration, and legacy restore with standalone RED→GREEN tests.
