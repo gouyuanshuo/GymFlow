@@ -20,7 +20,6 @@ jobs:
     timeout-minutes: 45
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
-      GYMFLOW_DERIVED_DATA: ${{ runner.temp }}/GymFlowDerivedData
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -30,6 +29,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo "GYMFLOW_DERIVED_DATA=$RUNNER_TEMP/GymFlowDerivedData" >> "$GITHUB_ENV"
           xcodebuild -version
           xcrun simctl list devices available
           python3 - <<'PY'
