@@ -2,7 +2,6 @@ import SwiftUI
 
 /// Modern visual barbell plate calculator sheet.
 struct PlateCalculatorSheet: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var targetWeight: Double
@@ -200,32 +199,59 @@ struct PlateCalculatorSheet: View {
     }
 
     private var barSelector: some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
-            : AnyLayout(HStackLayout())
-        return layout {
+        VStack(alignment: .leading, spacing: 8) {
             Text("Barbell Weight")
-                .font(.subheadline)
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            if !dynamicTypeSize.isAccessibilitySize { Spacer() }
-
-            Picker("Barbell Weight", selection: $barWeight) {
-                Text("20 kg (Olympic)").tag(20.0)
-                Text("15 kg (Women's)").tag(15.0)
-                Text("10 kg (Technique)").tag(10.0)
-            }
-            .pickerStyle(.menu)
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityIdentifier("plate-bar-weight-picker")
-            .onChange(of: barWeight) { _, selectedBarWeight in
-                targetWeight = max(targetWeight, selectedBarWeight)
+            ForEach([20.0, 15.0, 10.0], id: \.self) { weight in
+                barChoice(weight)
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(Color(uiColor: .secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func barChoice(_ weight: Double) -> some View {
+        let selected = barWeight == weight
+        let label: String
+        switch weight {
+        case 20: label = "20 kg (Olympic)"
+        case 15: label = "15 kg (Women's)"
+        default: label = "10 kg (Technique)"
+        }
+
+        return Button {
+            barWeight = weight
+            targetWeight = max(targetWeight, weight)
+        } label: {
+            HStack(spacing: 8) {
+                Text(label)
+                    .font(.subheadline.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if selected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(GymTheme.voltForeground)
+                        .accessibilityHidden(true)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .padding(.horizontal, 12)
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .background(selected ? GymTheme.volt.opacity(0.15) : Color(uiColor: .tertiarySystemFill))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(selected ? GymTheme.voltForeground : .clear, lineWidth: 1)
+        }
+        .accessibilityLabel(label)
+        .accessibilityIdentifier("plate-bar-weight-\(Int(weight))")
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

@@ -83,7 +83,7 @@ jobs:
         run: |
           set -euo pipefail
           xcrun swift-format lint --recursive --parallel \
-            GymFlow GymFlowActivityShared GymFlowLiveActivityExtension GymFlowTests \
+            GymFlow GymFlowActivityShared GymFlowLiveActivityExtension GymFlowTests GymFlowUITests \
             > "$RUNNER_TEMP/GymFlow-lint.log" 2>&1
           python3 - <<'PY'
           import os
