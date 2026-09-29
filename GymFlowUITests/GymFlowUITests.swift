@@ -180,17 +180,12 @@ final class GymFlowUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Plate Calculator"].waitForExistence(timeout: 5))
 
         let target = app.staticTexts["plate-target-weight"]
-        let sheetScroll = app.scrollViews["plate-calculator-scroll"]
         XCTAssertEqual(target.label, "20")
 
         selectBar("15 kg (Women's)", in: app)
 
         let decrease = app.buttons["-5"]
-        scrollToVisible(
-            decrease, in: sheetScroll,
-            top: app.navigationBars["Plate Calculator"].frame.maxY + 8,
-            bottom: min(sheetScroll.frame.maxY, app.frame.maxY - 44)
-        )
+        scrollPlateSheetToVisible(decrease, in: app)
         decrease.tap()
         waitForLabel("15", on: target)
 
@@ -249,6 +244,15 @@ final class GymFlowUITests: XCTestCase {
         XCTAssertTrue(setRow.waitForExistence(timeout: 5))
         let progressScroll = app.scrollViews["exercise-progress-scroll"]
         keepScreenshot(named: "Exercise progress chart before scrolling")
+        let chart = progressScroll.otherElements.matching(
+            identifier: "strength-progression-chart"
+        ).firstMatch
+        chart.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let reset = app.buttons["Reset"]
+        XCTAssertTrue(reset.waitForExistence(timeout: 5), "Tapping the chart selects a data point")
+        reset.tap()
+        XCTAssertFalse(reset.exists)
+
         for _ in 0..<5 {
             if setRow.isHittable { break }
             progressScroll.swipeUp()
@@ -268,20 +272,6 @@ final class GymFlowUITests: XCTestCase {
         XCTAssertTrue(sixthSet.isHittable)
         XCTAssertTrue(setRow.frame.contains(sixthSet.frame), "The whole sixth set should be visible")
         keepScreenshot(named: "Exercise progress sixth completed set")
-
-        let chart = progressScroll.otherElements.matching(
-            identifier: "strength-progression-chart"
-        ).firstMatch
-        scrollToVisible(
-            chart, in: progressScroll,
-            top: app.navigationBars.firstMatch.frame.maxY + 8,
-            bottom: app.frame.maxY - 44
-        )
-        chart.coordinate(withNormalizedOffset: CGVector(dx: 0.65, dy: 0.5)).tap()
-        let reset = app.buttons["Reset"]
-        XCTAssertTrue(reset.waitForExistence(timeout: 5), "Tapping the chart selects a data point")
-        reset.tap()
-        XCTAssertFalse(reset.exists)
     }
 
     @MainActor
@@ -657,7 +647,7 @@ final class GymFlowUITests: XCTestCase {
         completionShare.tap()
         verifySharePreviewAndOpenActivitySheet(in: app, randomize: true)
         dismissActivitySheet(in: app)
-        app.buttons["Done"].tap()
+        app.navigationBars["Share Preview"].buttons["Done"].tap()
 
         let saveAndReturn = app.buttons["Save and Return to Today"]
         scrollToHittable(saveAndReturn, in: app)
@@ -681,12 +671,7 @@ final class GymFlowUITests: XCTestCase {
     @MainActor
     private func selectBar(_ label: String, in app: XCUIApplication) {
         let option = app.buttons[label]
-        let sheetScroll = app.scrollViews["plate-calculator-scroll"]
-        scrollToVisible(
-            option, in: sheetScroll,
-            top: app.navigationBars["Plate Calculator"].frame.maxY + 8,
-            bottom: min(sheetScroll.frame.maxY, app.frame.maxY - 44)
-        )
+        scrollPlateSheetToVisible(option, in: app)
         XCTAssertFalse(option.isSelected)
         option.tap()
         XCTAssertTrue(option.isSelected)
@@ -699,6 +684,35 @@ final class GymFlowUITests: XCTestCase {
             object: element
         )
         XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed)
+    }
+
+    @MainActor
+    private func scrollPlateSheetToVisible(_ element: XCUIElement, in app: XCUIApplication) {
+        let navigationBar = app.navigationBars["Plate Calculator"]
+        let visibleBottom = app.frame.maxY - 44
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        for _ in 0..<15 {
+            let visibleTop = navigationBar.frame.maxY + 8
+            if element.exists,
+                element.frame.minY >= visibleTop,
+                element.frame.maxY <= visibleBottom,
+                element.isHittable
+            {
+                break
+            }
+            // The sheet ScrollView reports an AX frame above the visible medium sheet.
+            // Use screen coordinates inside the content to scroll or expand it.
+            let start = origin.withOffset(CGVector(dx: app.frame.midX, dy: visibleBottom - 40))
+            let end = start.withOffset(CGVector(dx: 0, dy: -220))
+            start.press(
+                forDuration: 0.05, thenDragTo: end,
+                withVelocity: .slow, thenHoldForDuration: 0.2
+            )
+        }
+        XCTAssertTrue(element.exists)
+        XCTAssertTrue(element.isHittable, "\(element.identifier) should be reachable by scrolling")
+        XCTAssertGreaterThanOrEqual(element.frame.minY, navigationBar.frame.maxY + 8)
+        XCTAssertLessThanOrEqual(element.frame.maxY, visibleBottom)
     }
 
     @MainActor
@@ -727,10 +741,11 @@ final class GymFlowUITests: XCTestCase {
         scrollToVisible(
             motion, in: accessibilityTable,
             top: settings.navigationBars.firstMatch.frame.maxY + 8,
-            bottom: settings.frame.maxY - 44,
+            bottom: settings.frame.midY + 100,
             horizontalPosition: 0.97
         )
-        motion.buttons["MOTION_TITLE"].press(forDuration: 0.15)
+        motion.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)).tap()
+        XCTAssertTrue(settings.navigationBars["Motion"].waitForExistence(timeout: 5))
         XCTAssertTrue(reduceMotion.waitForExistence(timeout: 5))
         return reduceMotion
     }
@@ -836,13 +851,16 @@ final class GymFlowUITests: XCTestCase {
 
     @MainActor
     private func dismissActivitySheet(in app: XCUIApplication) {
-        let close = app.buttons["Close"].firstMatch
+        let close = app.otherElements["ActivityListView"].buttons["header.closeButton"]
         if close.waitForExistence(timeout: 2) {
             close.tap()
         } else {
-            app.swipeDown()
+            // The activity controller can run outside GymFlow's process.
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.13)).tap()
         }
-        XCTAssertTrue(app.navigationBars["Share Preview"].waitForExistence(timeout: 5))
+        let done = app.navigationBars["Share Preview"].buttons["Done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 5))
+        XCTAssertTrue(done.isHittable, "The native share sheet should be dismissed")
     }
 
     @MainActor
