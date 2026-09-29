@@ -208,6 +208,7 @@ final class GymFlowUITests: XCTestCase {
         barSelector.tap()
         app.buttons["20 kg (Olympic)"].tap()
         XCTAssertEqual(target.label, "20")
+        keepScreenshot(named: "Plate calculator after heavier bar selection")
 
         app.buttons["Done"].tap()
         cancelActiveWorkout(in: app)
@@ -274,6 +275,7 @@ final class GymFlowUITests: XCTestCase {
             setRow.swipeLeft()
         }
         XCTAssertTrue(sixthSet.isHittable)
+        keepScreenshot(named: "Exercise progress sixth completed set")
     }
 
     @MainActor
@@ -551,6 +553,85 @@ final class GymFlowUITests: XCTestCase {
         }
         keepScreenshot(named: "Workout Calendar day")
         app.buttons["Done"].tap()
+    }
+
+    @MainActor
+    func testReducedMotionTimerAndCompletion() throws {
+        let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
+        settings.launch()
+        let reduceMotion = settings.switches["Reduce Motion"]
+        if !reduceMotion.waitForExistence(timeout: 2) {
+            let accessibility = settings.staticTexts["Accessibility"].firstMatch
+            var attempts = 0
+            while !accessibility.isHittable, attempts < 8 {
+                settings.swipeUp()
+                attempts += 1
+            }
+            XCTAssertTrue(accessibility.isHittable)
+            accessibility.tap()
+            let motion = settings.staticTexts["Motion"].firstMatch
+            XCTAssertTrue(motion.waitForExistence(timeout: 5))
+            motion.tap()
+        }
+        XCTAssertTrue(reduceMotion.waitForExistence(timeout: 5))
+        let wasEnabled = reduceMotion.value as? String == "1"
+        let app = XCUIApplication()
+        addTeardownBlock {
+            await MainActor.run {
+                app.terminate()
+                settings.activate()
+                XCTAssertTrue(reduceMotion.waitForExistence(timeout: 5))
+                if !wasEnabled, reduceMotion.value as? String == "1" {
+                    reduceMotion.tap()
+                }
+                XCTAssertEqual(reduceMotion.value as? String, wasEnabled ? "1" : "0")
+                settings.terminate()
+            }
+        }
+        if !wasEnabled {
+            reduceMotion.tap()
+        }
+        XCTAssertEqual(reduceMotion.value as? String, "1")
+        keepScreenshot(named: "Reduce Motion enabled in Settings")
+        app.launch()
+        if app.buttons["Resume Workout"].waitForExistence(timeout: 3) {
+            app.buttons["Resume Workout"].tap()
+            cancelActiveWorkout(in: app)
+        }
+        openActiveWorkout(in: app)
+        keepScreenshot(named: "Reduced Motion active workout")
+        let completeSet = app.buttons["Complete set 1"]
+        XCTAssertTrue(completeSet.waitForExistence(timeout: 10))
+        scrollToElement(completeSet, in: app)
+        completeSet.tap()
+
+        let pause = app.buttons["Pause Rest"]
+        scrollToElement(pause, in: app)
+        XCTAssertTrue(app.staticTexts["Rest time remaining"].exists)
+        keepScreenshot(named: "Reduced Motion rest countdown")
+        pause.tap()
+        XCTAssertTrue(app.buttons["Resume Rest"].waitForExistence(timeout: 5))
+        let addThirtySeconds = app.buttons["+30 sec"]
+        scrollToElement(addThirtySeconds, in: app)
+        addThirtySeconds.tap()
+        let skip = app.buttons["Skip Rest"]
+        scrollToElement(skip, in: app)
+        XCTAssertTrue(app.buttons["More timer options"].isHittable)
+        keepScreenshot(named: "Reduced Motion paused timer controls")
+        skip.tap()
+
+        app.buttons["Finish"].tap()
+        let confirmFinish = app.buttons["Finish Workout"].firstMatch
+        XCTAssertTrue(confirmFinish.waitForExistence(timeout: 5))
+        confirmFinish.tap()
+        XCTAssertTrue(app.staticTexts["Workout Complete"].waitForExistence(timeout: 10))
+        keepScreenshot(named: "Reduced Motion static workout celebration")
+        let saveAndReturn = app.buttons["Save and Return to Today"]
+        scrollToHittable(saveAndReturn, in: app)
+        XCTAssertTrue(saveAndReturn.isHittable)
+        keepScreenshot(named: "Reduced Motion completion actions")
+        saveAndReturn.tap()
+        XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 10))
     }
 
     @MainActor
