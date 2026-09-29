@@ -3,9 +3,13 @@ import SwiftUI
 /// Modernized rest timer card featuring a luminous circular countdown ring and tactile gym controls.
 struct RestTimerRingCard: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @ObservedObject var timer: RestTimerService
     @State private var isPulsing = false
+
+    private var reduceMotion: Bool {
+        systemReduceMotion || GymTheme.reduceMotionForUITests
+    }
 
     var body: some View {
         VStack(spacing: 16) {

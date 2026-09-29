@@ -15,10 +15,13 @@ private struct ConfettiParticle {
 
 /// GPU-accelerated 2D immediate-mode celebratory particle canvas.
 struct ConfettiCanvas: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @State private var particles: [ConfettiParticle] = []
     @State private var startDate = Date()
     @State private var isActive = true
+    private var reduceMotion: Bool {
+        systemReduceMotion || GymTheme.reduceMotionForUITests
+    }
     private let colors: [Color] = [
         GymTheme.volt,
         GymTheme.cyan,

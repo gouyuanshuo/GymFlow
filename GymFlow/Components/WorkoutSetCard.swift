@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct WorkoutSetCard: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let set: WorkoutSetRecord
     let canRemove: Bool
     let onChange: () -> Void
@@ -40,7 +41,7 @@ struct WorkoutSetCard: View {
                 )
             }
 
-            HStack(alignment: .top, spacing: 12) {
+            valueLayout {
                 HStack(spacing: 6) {
                     WorkoutValueButton(
                         title: "Weight",
@@ -60,7 +61,7 @@ struct WorkoutSetCard: View {
                             Image(systemName: "circle.circle")
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(GymTheme.cyanForeground)
-                                .frame(width: 36, height: 48)
+                                .frame(width: 44, height: 48)
                                 .background(Color(uiColor: .tertiarySystemFill))
                                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
@@ -128,6 +129,12 @@ struct WorkoutSetCard: View {
         return Color(uiColor: .secondarySystemBackground)
     }
 
+    private var valueLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 12))
+    }
+
     private func transaction(for kind: WorkoutValuePickerKind) -> WorkoutValuePickerTransaction {
         switch kind {
         case .weight:
@@ -159,12 +166,16 @@ private struct WorkoutValueButton: View {
                     Text(value)
                         .font(.title3.monospacedDigit().weight(.semibold))
                         .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     if let unit {
                         Text(unit)
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
                             .accessibilityHidden(true)
                     }
 

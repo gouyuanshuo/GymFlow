@@ -516,10 +516,14 @@ Acceptance: each selected exercise has a readable offline guide and other exerci
   - [x] Share the e1RM policy, report true best weight, gather repeated exercise records by stable identity, and add a typechecked six-set scroll flow.
   - [x] Verify six distinct capsules and horizontal scrolling in the normal-text native UI run.
   - [x] Verify chart gestures allow vertical history scrolling and chart values remain readable at accessibility text sizes (hosted run 36562309029, light and dark).
+  - [x] Diagnose the six-set UI test's stale button value and final-set exercise transition from native recordings.
+  - [ ] Reverify six completed sets and the persisted sixth capsule after the UI test correction.
   - [ ] Run the iOS history unit/UI tests and inspect scrolling on device.
 - [ ] Fix rest-ring duration, accessibility-size controls, and motion behavior.
   - [x] Persist current interval duration through start, extension, pause, restart, migration, and legacy restore with standalone RED→GREEN tests.
   - [x] Connect the ring fraction, restore accessibility-size controls/labels, and gate its animation for Reduce Motion.
+  - [x] Verify the real iOS Reduce Motion setting in the standard hosted UI suite.
+  - [ ] Verify the large-text timer and completion flow with deterministic reduced-motion UI automation.
   - [ ] Verify timer controls and motion behavior on iOS at accessibility text sizes.
 - [ ] Use readable adaptive foreground accents and respect Reduce Motion in celebrations.
   - [x] Add light/dark foreground roles and a static celebration under Reduce Motion; pass a portable contrast check.
@@ -535,5 +539,6 @@ Acceptance: each selected exercise has a readable offline guide and other exerci
   - [x] Verify six distinct history capsules after correcting the UI test's child-element counting (standard run 36546361016).
   - [ ] Run the native build, full unit/UI tests, and simulator visual acceptance when Xcode/CoreSimulator works.
   - [ ] Run the same native gate on GitHub's Mac runner while this command session cannot reach macOS services.
+  - [ ] Inspect the revised accessibility-size set fields, timer, and completion screenshots in both appearances.
 
 Acceptance: the UI/UX branch remains native and offline-first, reports truthful weights and timer progress, and is accessible in light/dark appearance and large text.
