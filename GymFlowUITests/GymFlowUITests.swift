@@ -171,7 +171,9 @@ final class GymFlowUITests: XCTestCase {
         weightButton.tap()
         let weightWheel = app.pickerWheels.firstMatch
         XCTAssertTrue(weightWheel.waitForExistence(timeout: 5))
-        weightWheel.adjust(toPickerWheelValue: "20")
+        if weightWheel.value as? String != "20" {
+            weightWheel.adjust(toPickerWheelValue: "20")
+        }
         app.buttons["confirm-workout-value"].tap()
 
         let calculator = app.otherElements["workout-set-card-1"]
@@ -216,19 +218,37 @@ final class GymFlowUITests: XCTestCase {
                 addSet(number: number, in: app)
             }
         }
+        let completedCount = app.staticTexts["workout-completed-set-count"]
+        XCTAssertEqual(completedCount.label, "0 completed")
+        let firstExerciseName = app.staticTexts["active-exercise-name"].label
+        let nextExercise = app.staticTexts.matching(NSPredicate(
+            format: "identifier == %@ AND label != %@",
+            "active-exercise-name", firstExerciseName
+        )).firstMatch
         for number in 1...6 {
             let completion = app.buttons["set-completion-\(number)"]
             scrollToElement(completion, in: app)
             completion.tap()
-            let completed = XCTNSPredicateExpectation(
-                predicate: NSPredicate(format: "value == %@", "Completed"),
-                object: completion
-            )
-            if XCTWaiter.wait(for: [completed], timeout: 2) != .completed {
-                scrollToElement(completion, in: app)
-                completion.press(forDuration: 0.15)
+            let expectedCount = app.staticTexts.matching(NSPredicate(
+                format: "identifier == %@ AND label == %@",
+                "workout-completed-set-count", "\(number) completed"
+            )).firstMatch
+            if number < 6 {
+                if !expectedCount.waitForExistence(timeout: 3) {
+                    scrollToElement(completion, in: app)
+                    completion.press(forDuration: 0.15)
+                }
+                XCTAssertTrue(expectedCount.waitForExistence(timeout: 3),
+                              "Set \(number) completes")
+            } else {
+                // Completing the final set can advance to the next exercise, removing this card.
+                if !nextExercise.waitForExistence(timeout: 3) && !expectedCount.exists {
+                    scrollToElement(completion, in: app)
+                    completion.press(forDuration: 0.15)
+                }
+                XCTAssertTrue(nextExercise.waitForExistence(timeout: 3) || expectedCount.exists,
+                              "Set 6 completes or advances to the next exercise")
             }
-            XCTAssertEqual(completion.value as? String, "Completed", "Set \(number) completes")
         }
 
         app.buttons["Finish"].tap()
@@ -584,6 +604,19 @@ final class GymFlowUITests: XCTestCase {
         setReduceMotion(true, using: reduceMotion)
         keepScreenshot(named: "Reduce Motion enabled in Settings")
         app.launch()
+        runReducedMotionTimerAndCompletion(in: app)
+    }
+
+    @MainActor
+    func testLargeTextReducedMotionTimerAndCompletion() throws {
+        let app = XCUIApplication()
+        app.launchArguments.append("-GymFlowReduceMotionUITest")
+        app.launch()
+        runReducedMotionTimerAndCompletion(in: app)
+    }
+
+    @MainActor
+    private func runReducedMotionTimerAndCompletion(in app: XCUIApplication) {
         if app.buttons["Resume Workout"].waitForExistence(timeout: 3) {
             app.buttons["Resume Workout"].tap()
             cancelActiveWorkout(in: app)

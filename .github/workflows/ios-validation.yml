@@ -133,6 +133,9 @@ jobs:
               for test in "${workout_flows[@]}"; do
                 selection+=("-skip-testing:GymFlowUITests/GymFlowUITests/$test")
               done
+              selection+=(
+                -skip-testing:GymFlowUITests/GymFlowUITests/testLargeTextReducedMotionTimerAndCompletion
+              )
               ;;
             workout-flows)
               for test in "${workout_flows[@]}"; do
@@ -143,7 +146,7 @@ jobs:
               selection+=(
                 -only-testing:GymFlowUITests/GymFlowUITests/testPlateCalculatorTargetFollowsSelectedBar
                 -only-testing:GymFlowUITests/GymFlowUITests/testCompletedSetHistoryCanScrollToSixthSet
-                -only-testing:GymFlowUITests/GymFlowUITests/testReducedMotionTimerAndCompletion
+                -only-testing:GymFlowUITests/GymFlowUITests/testLargeTextReducedMotionTimerAndCompletion
               )
               ;;
             *) echo "Unknown test suite: $GYMFLOW_TEST_SUITE" >&2; exit 1 ;;

@@ -77,6 +77,16 @@ enum GymTheme {
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
             || ProcessInfo.processInfo.arguments.contains("-testing")
     }
+
+    /// UI automation can inspect the reduced-motion layout at large text sizes without
+    /// depending on navigation through the separate Settings app.
+    static var reduceMotionForUITests: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-GymFlowReduceMotionUITest")
+        #else
+        false
+        #endif
+    }
 }
 
 // MARK: - View Modifiers

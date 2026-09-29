@@ -81,14 +81,31 @@ struct WorkoutExerciseHeader: View {
         .foregroundStyle(.secondary)
     }
 
+    @ViewBuilder
     private var setPosition: some View {
-        HStack(spacing: 8) {
-            Text("Set \(currentSetNumber) of \(max(1, setCount))")
-                .fontWeight(.semibold)
-            Text("·")
-                .accessibilityHidden(true)
-            Text("\(completedSetCount) completed")
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 2) {
+                setNumberText
+                completedCountText
+            }
+        } else {
+            HStack(spacing: 8) {
+                setNumberText
+                Text("·")
+                    .accessibilityHidden(true)
+                completedCountText
+            }
         }
+    }
+
+    private var setNumberText: some View {
+        Text("Set \(currentSetNumber) of \(max(1, setCount))")
+            .fontWeight(.semibold)
+    }
+
+    private var completedCountText: some View {
+        Text("\(completedSetCount) completed")
+            .accessibilityIdentifier("workout-completed-set-count")
     }
 
     @ViewBuilder
