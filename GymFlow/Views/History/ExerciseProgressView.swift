@@ -16,7 +16,10 @@ struct ExerciseProgressView: View {
     private var history: [HistoryEntry] {
         let identity = ExerciseIdentity(id: exerciseID, name: exerciseName)
         return sessions.compactMap { session in
-            let sets = ExerciseProgressHistory.completedSets(matching: identity, in: session)
+            let sets = ExerciseProgressHistory.completedWorkingSets(
+                matching: identity,
+                in: session
+            )
             return sets.isEmpty ? nil : (session, sets)
         }
     }
