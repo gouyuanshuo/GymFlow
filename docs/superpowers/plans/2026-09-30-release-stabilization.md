@@ -114,7 +114,7 @@ func contextHeading(
   use the same contextual wording. Do not change renderer dimensions or date formatting.
 - [ ] **Step 3: Render regression.** Re-run summary tests and the existing 1179×2556 render tests to
   ensure the label change does not break export.
-- [ ] **Step 4: Verify and commit.** Run the focused/full unit target and generic app build, inspect
+- [x] **Step 4: Verify and commit.** Run the focused/full unit target and generic app build, inspect
   the rendered-card diff if an attachment can be produced, then commit Task 3 files.
 
 ### Task 4: Centralize the estimated 1RM policy
@@ -151,7 +151,7 @@ static func estimatedOneRepMax(weight: Double, repetitions: Int) -> Double?
 - [x] **Step 4: Verify all consumers.** Trace and test Personal Best summary/events, Exercise
   Detail, Exercise Progress, chart construction, and share-card PR building. Confirm no other
   formula or repetition ceiling remains with `rg`.
-- [ ] **Step 5: Verify and commit.** Run focused performance/progression/sharing tests, all unit
+- [x] **Step 5: Verify and commit.** Run focused performance/progression/sharing tests, all unit
   tests, generic app build, and semantic lint. Commit Task 4 files.
 
 ### Task 5: Search backward for a valid workout prefill
@@ -175,7 +175,7 @@ with a per-set historical lookup over completed sessions sorted newest-first.
   each target set number, lazily scan completed sessions newest-first and all matching records until
   finding a completed non-warm-up set with finite nonnegative weight and positive reps. Preserve
   ID-first matching and legacy normalized-name fallback.
-- [ ] **Step 4: Verify and commit.** Run focused workout-service tests, all unit tests, and the
+- [x] **Step 4: Verify and commit.** Run focused workout-service tests, all unit tests, and the
   generic build. Inspect for changes to session snapshots or warm-up creation; commit Task 5 files.
 
 ### Task 6: Establish explicit non-destructive SwiftData migration safety
@@ -223,7 +223,7 @@ path for disk migration tests, while its production `makeContainer()` call stays
 - [x] **Step 5: Verify migration behavior.** Run the migration test repeatedly against fresh
   temporary stores, then all unit tests and the generic app build. Document that this validates
   adoption of an implicit V1 store, not a future V1→V2 transformation.
-- [ ] **Step 6: Verify and commit.** Run semantic lint/diff checks and commit Task 6 files.
+- [x] **Step 6: Verify and commit.** Run semantic lint/diff checks and commit Task 6 files.
 
 ### Task 7: Full release-stabilization gate and documentation
 
@@ -233,7 +233,7 @@ path for disk migration tests, while its production `makeContainer()` call stays
 - Modify: `PROGRESS.md`
 - Modify only if test infrastructure requires it: existing CI scripts/configuration
 
-- [ ] **Step 1: Main app build.** Run:
+- [x] **Step 1: Main app build.** Run:
 
   ```bash
   xcodebuild -project GymFlow.xcodeproj -scheme GymFlow -sdk iphonesimulator \
@@ -242,13 +242,13 @@ path for disk migration tests, while its production `makeContainer()` call stays
   ```
 
   Record success/failure, warnings, and errors exactly.
-- [ ] **Step 2: Unit tests.** Run the entire `GymFlowTests` target on the installed simulator. Record
+- [x] **Step 2: Unit tests.** Run the entire `GymFlowTests` target on the installed simulator. Record
   total passed/failed/skipped from actual output. If CoreSimulator prevents execution, run every
   viable direct SDK/typecheck harness and explicitly label the normal test run blocked.
-- [ ] **Step 3: UI tests.** Run every locally available partition previously audited: standard,
+- [x] **Step 3: UI tests.** Run every locally available partition previously audited: standard,
   workout flows, accessibility light, and accessibility dark. Record each command and outcome; do
   not convert environment-blocked tests into passes.
-- [ ] **Step 4: Static gates.** Run `git diff --check` and:
+- [x] **Step 4: Static gates.** Run `git diff --check` and:
 
   ```bash
   xcrun swift-format lint --recursive --parallel \
@@ -256,16 +256,16 @@ path for disk migration tests, while its production `makeContainer()` call stays
   ```
 
   Typecheck all application, extension, and test sources if the normal build remains blocked.
-- [ ] **Step 5: Scope and security inspection.** Confirm no Google Drive branch merge, Drive source,
+- [x] **Step 5: Scope and security inspection.** Confirm no Google Drive branch merge, Drive source,
   UI redesign, charts feature addition, unit conversion, RIR, plate-calculator, or music changes
   entered the diff. Confirm no database deletion/reset fallback was added.
-- [ ] **Step 6: Read-only whole-change review.** Apply the code-review checklist to the complete
+- [x] **Step 6: Read-only whole-change review.** Apply the code-review checklist to the complete
   diff. Resolve any Critical/Important finding through a fresh RED→GREEN cycle, then rerun affected
   gates. Multi-agent review is unavailable by session instruction, so report that limitation rather
   than claiming an independent reviewer.
-- [ ] **Step 7: Documentation.** Update the audit result, feature matrix/risks, milestone
+- [x] **Step 7: Documentation.** Update the audit result, feature matrix/risks, milestone
   checkboxes, exact commands/results, migration boundary, remaining risks, and physical-device
   status. Do not claim a device run unless performed during this task.
-- [ ] **Step 8: Final status.** Report exact files changed, root cause/fix/tests for each defect,
+- [x] **Step 8: Final status.** Report exact files changed, root cause/fix/tests for each defect,
   build/test results, remaining migration risks, current branch/HEAD/status, and whether evidence
   supports using `main` as the Google Drive integration base. Stop without starting the Drive work.
