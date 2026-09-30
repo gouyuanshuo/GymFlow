@@ -2,12 +2,12 @@ GYMFLOW AUDIT RESULT
 
 Current branch: `main`
 
-Current HEAD: `46748debc1a4485963c470230e0a823bf02be4e6`
+Current release-code HEAD: `2dd26055bf48558db61d22f80ce7ea586302058f`
 
-Working tree: The five stabilization fixes are committed on `main`. `AUDIT_REPORT.md`, `PLANS.md`,
-`PROGRESS.md`, and the release-stabilization execution plan contain intentional documentation
-updates. The pre-existing untracked `Screenshot 2026-08-06 at 5.03.28 pm.png` remains untouched. No
-user database was opened, reset, deleted, or rewritten, and no Google Drive branch was merged.
+Working tree: The five stabilization fixes and version `1.0.1` build `2` are committed and published
+on GitHub `main`. The publication-record commit after the release-code HEAD changes documentation
+only. The pre-existing untracked `Screenshot 2026-08-06 at 5.03.28 pm.png` remains untouched. No user
+database was opened, reset, deleted, or rewritten, and no Google Drive branch was merged.
 
 Build status: **FRESH XCODE BUILD BLOCKED BEFORE COMPILATION BY THE COMMAND ENVIRONMENT.** The
 post-fix clean `GymFlow` simulator build exited 134 before project compilation because Xcode could
@@ -72,14 +72,14 @@ Relevant feature commits used by the matrix: initial workout/history/local-music
 `5eb00917f6cfcaa74dc202c35eafb72d59764ca1` and
 `75ba37763a3ee1386d73199768931543a3c004ac`; modernization
 `665187eddebb466951920cfc2f033f4da93ab5c2` through
-`160c961c7912f09a0bfb780f0305d8651525daa4`; stabilization commits `8d577e3`,
-`599ef6d`, `649d4c2`, `ca3bf7e`, `8d52751`, and `46748de`; unmerged Drive/guides tip
+`160c961c7912f09a0bfb780f0305d8651525daa4`; stabilization commits `8050fb3`,
+`602a440`, `56e631e`, `203e3ea`, `86e0c14`, and `6c60209`; unmerged Drive/guides tip
 `f112aaf3e84ebbc9e1cab15395d76cd1c5d116a0`. The detailed sections identify the applicable
 commit(s) where a row spans more than one subsystem.
 
 | Feature | Status | Evidence | Tested | Missing / Problem |
 | --- | --- | --- | --- | --- |
-| Exercise Library | PARTIAL | `ExerciseLibraryView`, `ExerciseLibraryService`, `ExerciseDefinition`; identity-safe reset in `8d577e3` | Persistence/identity test typechecks; real-source reset/PB harness passes | CRUD/archive gestures were not freshly exercised |
+| Exercise Library | PARTIAL | `ExerciseLibraryView`, `ExerciseLibraryService`, `ExerciseDefinition`; identity-safe reset in `8050fb3` | Persistence/identity test typechecks; real-source reset/PB harness passes | CRUD/archive gestures were not freshly exercised |
 | Exercise Editing | PARTIAL | `ExerciseEditorView`; Settings → Exercise Library → Detail → Edit | Validation and cross-context persistence tests | No focused post-fix edit UI run |
 | Exercise Detail | PARTIAL | Metadata/defaults/notes/PBs/Best History/recent working sets | PB and working-set tests typecheck; relevant harnesses pass | Not visually inspected post-fix |
 | Exercise Picker | PARTIAL | `PlanEditorView` → `ExercisePickerView`; archived items excluded and defaults copied into draft | Defaults/override unit tests; plan-routing UI test | Full search/filter/create/select/save plan flow was not run in this audit |
@@ -311,11 +311,11 @@ No source-proven defect remains among the five authorized stabilization items. E
 
 | Former defect | Fix commit | RED evidence | Current evidence |
 | --- | --- | --- | --- |
-| Reset destroyed exercise identity | `8d577e3` | New test failed because no identity-safe reset API existed | Current-source SwiftData harness preserves UUID, historical record/snapshot, PB, and unique IDs across two resets |
-| Historical share said “TODAY” | `599ef6d` | New test failed because no contextual heading existed | Fixed-calendar harness returns `TODAY'S WORKOUT` for same day and `WORKOUT SUMMARY` for old history without changing the date |
-| e1RM rules differed | `649d4c2`, `46748de` | Real-source harness failed when 16 reps returned raw weight; warm-up test failed on missing working-set filter | Boundary/e1RM and working-set harnesses pass; duplicate-formula search finds only the central service formula |
-| Newest incomplete history blocked prefill | `ca3bf7e` | Real-source harness reproduced plan fallback instead of older completed values | Current harness retrieves older values and skips cancelled/incomplete/warm-up/non-finite/zero-rep records |
-| No explicit migration boundary | `8d52751` | New fixture would not compile because V1/plan/configuration path did not exist | Implicit disk store reopened through V1 twice with UUIDs, relationships, values, status/dates, and snapshots retained |
+| Reset destroyed exercise identity | `8050fb3` | New test failed because no identity-safe reset API existed | Current-source SwiftData harness preserves UUID, historical record/snapshot, PB, and unique IDs across two resets |
+| Historical share said “TODAY” | `602a440` | New test failed because no contextual heading existed | Fixed-calendar harness returns `TODAY'S WORKOUT` for same day and `WORKOUT SUMMARY` for old history without changing the date |
+| e1RM rules differed | `56e631e`, `6c60209` | Real-source harness failed when 16 reps returned raw weight; warm-up test failed on missing working-set filter | Boundary/e1RM and working-set harnesses pass; duplicate-formula search finds only the central service formula |
+| Newest incomplete history blocked prefill | `203e3ea` | Real-source harness reproduced plan fallback instead of older completed values | Current harness retrieves older values and skips cancelled/incomplete/warm-up/non-finite/zero-rep records |
+| No explicit migration boundary | `86e0c14` | New fixture would not compile because V1/plan/configuration path did not exist | Implicit disk store reopened through V1 twice with UUIDs, relationships, values, status/dates, and snapshots retained |
 
 The remaining verification limitation is environmental: the post-fix native Xcode build, unit tests,
 UI tests, simulator launch, and physical-iPhone pass did not execute in this command session.
@@ -378,10 +378,10 @@ No merge was performed.
 
 | Branch/ref | Exact commit | Relation to `main` | Feature content |
 | --- | --- | --- | --- |
-| `feature/ui-ux-modernization` | `7c6162fc5bf54bb51c157bc4c7849e8d44d77eb9` | `main` ahead 12, branch ahead 0; fully merged ancestor | Onyx & Volt modernization and acceptance docs |
-| `feature/google-drive-exercise-guides` | `f112aaf3e84ebbc9e1cab15395d76cd1c5d116a0` | `main` ahead 30, branch ahead 11; merge base `ffef63dffc192aec6e052250b8cd154d797abbf2` | Google OAuth/upload/range playback, safe local removal, three offline exercise guides, branch tests |
-| `agent/flac-and-workout-set-ui` | `cef10ad280dc7aa36c02518e6711743e4cb6ae20` | `main` ahead 30, branch ahead 1 | One old `PROGRESS.md`-only commit; no missing production feature |
-| cached `origin/agent/flac-and-workout-set-ui` | `6f67af8a03c581c919ad5a777b6d889d5445789b` | `main` ahead 34, ref ahead 1 | Unrelated Android port, not iOS release work |
+| `feature/ui-ux-modernization` | `7c6162fc5bf54bb51c157bc4c7849e8d44d77eb9` | `main` ahead 14, branch ahead 0; fully merged ancestor | Onyx & Volt modernization and acceptance docs |
+| `feature/google-drive-exercise-guides` | `f112aaf3e84ebbc9e1cab15395d76cd1c5d116a0` | `main` ahead 32, branch ahead 11; merge base `ffef63dffc192aec6e052250b8cd154d797abbf2` | Google OAuth/upload/range playback, safe local removal, three offline exercise guides, branch tests |
+| `agent/flac-and-workout-set-ui` | `cef10ad280dc7aa36c02518e6711743e4cb6ae20` | `main` ahead 32, branch ahead 1 | One old `PROGRESS.md`-only commit; no missing production feature |
+| cached `origin/agent/flac-and-workout-set-ui` | `6f67af8a03c581c919ad5a777b6d889d5445789b` | `main` ahead 36, ref ahead 1 | Unrelated Android port, not iOS release work |
 
 The Drive/guides branch adds 39 files/changes and 4,533 insertions against its base. Its recorded
 verification was 141/141 unit tests and two focused UI tests, but its all-target run was not green:
@@ -391,12 +391,13 @@ Google account, upload, stream, background, network-loss, or signed-device test 
 There is one worktree only:
 
 ```text
-/Users/26032096/Documents/Projects/GymFlow  46748de...  [main]
+/Users/26032096/Documents/Projects/GymFlow  2dd2605...  [main release-code parent]
 ```
 
-Remote freshness could not be revalidated: `git ls-remote` could not resolve `github.com`, and the
-configured `gh` credential is invalid. Branch/ref statements above are exact for the local and cached
-refs present during this audit.
+GitHub was revalidated after publication through its API and a fresh fetch. It has exactly three
+branches: `main`, `feature/ui-ux-modernization`, and `agent/flac-and-workout-set-ui`. Remote `main`
+points to the published release tree; `feature/google-drive-exercise-guides` remains local-only and
+was not merged or published.
 
 ## 6. Current UI architecture
 
@@ -750,7 +751,7 @@ not performed.
 
 The final whole-diff self-review found no remaining Critical or Important issue. It did find and
 correct one consistency defect before this report was finalized: Exercise Progress still included
-warm-up sets even though PB/share calculations exclude them. Commit `46748de` routes progress
+warm-up sets even though PB/share calculations exclude them. Commit `6c60209` routes progress
 through completed working sets, with a focused RED→GREEN regression. An independent subagent review
 was not performed because this session explicitly prohibited delegation.
 

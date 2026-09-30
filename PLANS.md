@@ -583,6 +583,6 @@ Acceptance: the five confirmed source defects are corrected and `main` is the st
 - [x] Set the main app, test bundles, and Live Activity extension to marketing version `1.0.1` and build `2`.
 - [x] Keep Google Drive unmerged and exclude the unrelated screenshot from release commits.
 - [ ] Complete the post-stabilization physical-iPhone validation.
-- [ ] Publish the committed stabilization and release metadata to `origin/main`.
+- [x] Publish the committed stabilization and release metadata to `origin/main` without merging Google Drive.
 
 Acceptance: GitHub `main` contains the audited stabilization tree and version `1.0.1` build `2`; physical release acceptance remains separately evidenced.
