@@ -551,3 +551,38 @@ Acceptance: the UI/UX branch remains native and offline-first, reports truthful 
 - [x] Install in place, launch, and run isolated unit tests without deleting existing app data.
 
 Acceptance: the signed app builds and launches on the connected iPhone, and device test results are recorded separately from hosted simulator results.
+
+## Release-readiness and feature-completeness audit
+
+- [x] Read the project guidance/specification and inspect Git status, branches, commits, stashes, and worktrees without merging or resetting anything.
+- [x] Trace the runnable `main` navigation, persistence, workout, sharing, music, and Live Activity code paths and compare them with recent divergent work.
+- [x] Attempt a fresh clean main-scheme build and all-target test run; record the command-environment failure separately from source evidence.
+- [x] Inventory the unit/UI suites, inspect the four hosted test partitions, and typecheck the current app, extension, unit-test, and UI-test sources.
+- [x] Record the feature matrix, defects, unmerged work, UI map, Drive architecture, test evidence, physical limitations, risks, and next actions in `AUDIT_REPORT.md`.
+- [ ] Complete a fresh simulator launch, visual screenshot checklist, and 23-step regression smoke test when CoreSimulator/Xcode services are available to this command context.
+- [ ] Complete the outstanding physical-iPhone checks for system audio, Live Activity, persistence, sharing, and ergonomics.
+
+Acceptance: the report distinguishes current runnable behavior, other-branch code, prior evidence, fresh audit evidence, and unverified device-only behavior without changing application code or user data.
+
+## Pre–Google Drive main-branch stabilization
+
+- [x] Preserve `ExerciseDefinition` UUIDs, history linkage, PB lookup, and normalized uniqueness when Reset Sample Plans runs repeatedly.
+- [x] Use a same-local-day share heading for current workouts and a neutral heading for historical workouts without changing snapshot dates.
+- [x] Centralize Epley e1RM in `ExercisePerformanceService` for finite positive weight and 1...15 reps; return `nil` for invalid input and exclude warm-ups from strength progress.
+- [x] Search completed workout history newest-to-oldest per target set, skipping cancelled sessions and incomplete, warm-up, or unusable records.
+- [x] Register all nine persisted models as explicit schema V1, pass a migration plan to containers, lock the V1 shape, and prove implicit-store compatibility on disk without destructive fallback.
+- [x] Add seven formal regression tests and run six real-source executable checks through RED→GREEN cycles.
+- [x] Typecheck every current app/shared, extension, unit-test, and UI-test source and pass semantic lint/diff checks.
+- [ ] Run the post-fix clean main-scheme Xcode build and all 124 unit/render tests when Xcode host services are available; current commands exit 134 before compilation/discovery.
+- [ ] Run the standard, workout-flow, accessibility-light, and accessibility-dark UI partitions and a post-fix physical-iPhone acceptance pass.
+
+Acceptance: the five confirmed source defects are corrected and `main` is the stabilized source base for selective Google Drive integration. Native release acceptance remains pending the environment-blocked build/test/UI gates and must not be inferred from typechecks.
+
+## GymFlow 1.0.1 publication
+
+- [x] Set the main app, test bundles, and Live Activity extension to marketing version `1.0.1` and build `2`.
+- [x] Keep Google Drive unmerged and exclude the unrelated screenshot from release commits.
+- [ ] Complete the post-stabilization physical-iPhone validation.
+- [ ] Publish the committed stabilization and release metadata to `origin/main`.
+
+Acceptance: GitHub `main` contains the audited stabilization tree and version `1.0.1` build `2`; physical release acceptance remains separately evidenced.
