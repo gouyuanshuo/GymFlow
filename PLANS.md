@@ -547,7 +547,7 @@ Acceptance: the UI/UX branch remains native and offline-first, reports truthful 
 ## Connected iPhone verification follow-up
 
 - [x] Confirm that macOS detects the connected iPhone over USB and attempt a device build.
-- [ ] Build and sign GymFlow for the connected iPhone after Xcode's local service failure is resolved.
+- [ ] Build and sign GymFlow for the connected iPhone from a Mac Terminal context that can reach Xcode's services.
 - [ ] Install in place, launch, and run isolated unit tests without deleting existing app data.
 
 Acceptance: the signed app builds and launches on the connected iPhone, and device test results are recorded separately from hosted simulator results.
