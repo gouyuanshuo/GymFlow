@@ -51,6 +51,7 @@ struct ShareCardWorkoutHeader: View {
 /// The decorative banner beneath the headline.
 struct ShareCardHeroPanel: View {
     @Environment(\.workoutShareCardStyle) private var style
+    let heading: String
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -62,7 +63,7 @@ struct ShareCardHeroPanel: View {
                 .offset(x: style.length(212), y: style.length(8))
 
             VStack(alignment: .leading, spacing: style.length(6)) {
-                Text("TODAY'S WORKOUT")
+                Text(heading)
                     .font(style.font(8.5, .black))
                     .tracking(style.tracking(1.4))
                     .foregroundStyle(style.secondaryForegroundColor)

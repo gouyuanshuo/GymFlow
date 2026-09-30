@@ -159,6 +159,8 @@ struct WorkoutSharingTests {
     @Test("An old completed session produces a valid share summary")
     func historicalSessionSharing() throws {
         let oldDate = Date(timeIntervalSince1970: 1_500_000_000)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
         let session = WorkoutSession(
             planNameSnapshot: "Legacy Push Day",
             startedAt: oldDate,
@@ -178,6 +180,19 @@ struct WorkoutSharingTests {
         #expect(summary.workoutName == "Legacy Push Day")
         #expect(summary.date == oldDate)
         #expect(summary.exerciseHighlights.first?.name == "DB Bench")
+        #expect(
+            summary.contextHeading(
+                relativeTo: oldDate.addingTimeInterval(3_600),
+                calendar: calendar
+            ) == "TODAY'S WORKOUT"
+        )
+        #expect(
+            summary.contextHeading(
+                relativeTo: oldDate.addingTimeInterval(172_800),
+                calendar: calendar
+            ) == "WORKOUT SUMMARY"
+        )
+        #expect(summary.date == oldDate)
     }
 
     @Test("Plan changes cannot rewrite a historical share summary")
