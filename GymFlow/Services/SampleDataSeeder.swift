@@ -98,6 +98,26 @@ enum SampleDataSeeder {
         defaults.set(currentExerciseLibraryVersion, forKey: exerciseLibraryVersionKey)
     }
 
+    /// Restores the built-in workout plans without replacing stable exercise identities.
+    ///
+    /// Completed workout history stores `ExerciseDefinition.id` values. Deleting definitions while
+    /// retaining that history permanently disconnects Personal Best and progress lookups, so a
+    /// sample-plan reset removes plans only. Re-running normal seeding reconciles built-ins by their
+    /// normalized names, updates built-in metadata in place, and creates only definitions that are
+    /// genuinely missing.
+    static func resetSamplePlans(
+        context: ModelContext,
+        defaults: UserDefaults = .standard
+    ) throws {
+        for plan in try context.fetch(FetchDescriptor<WorkoutPlan>()) {
+            context.delete(plan)
+        }
+        defaults.set(false, forKey: seedingKey)
+        defaults.set(0, forKey: exerciseLibraryVersionKey)
+        try context.save()
+        try seedIfNeeded(context: context, defaults: defaults)
+    }
+
     static func linkLegacyPlannedExercises(
         plans: [WorkoutPlan],
         definitions: [ExerciseDefinition]
