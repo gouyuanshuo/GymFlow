@@ -151,6 +151,186 @@ struct GymFlowTests {
         #expect(sets[1].repetitions == 8)
     }
 
+    @Test("Workout prefill searches past newer incomplete history")
+    func workoutPrefillFindsOlderCompletedSets() {
+        let exerciseID = UUID()
+        let plan = WorkoutPlan(
+            name: "Chest",
+            exercises: [
+                PlannedExercise(
+                    exerciseID: exerciseID,
+                    exerciseNameSnapshot: "Bench Press",
+                    targetSets: 2,
+                    targetRepetitions: 10,
+                    targetWeight: 50
+                )
+            ]
+        )
+        let older = WorkoutSession(
+            planNameSnapshot: "Older",
+            startedAt: Date(timeIntervalSince1970: 1_000),
+            status: .completed,
+            exerciseRecords: [
+                ExerciseRecord(
+                    exerciseID: exerciseID,
+                    exerciseNameSnapshot: "Bench Press",
+                    sets: [
+                        WorkoutSetRecord(
+                            setNumber: 1,
+                            weight: 72.5,
+                            repetitions: 6,
+                            isCompleted: true
+                        ),
+                        WorkoutSetRecord(
+                            setNumber: 2,
+                            weight: 70,
+                            repetitions: 8,
+                            isCompleted: true
+                        ),
+                    ]
+                )
+            ]
+        )
+        let newerIncomplete = WorkoutSession(
+            planNameSnapshot: "Newer incomplete",
+            startedAt: Date(timeIntervalSince1970: 2_000),
+            status: .completed,
+            exerciseRecords: [
+                ExerciseRecord(
+                    exerciseID: exerciseID,
+                    exerciseNameSnapshot: "Bench Press",
+                    sets: [
+                        WorkoutSetRecord(setNumber: 1, weight: 90, repetitions: 3),
+                        WorkoutSetRecord(setNumber: 2, weight: 85, repetitions: 4),
+                    ]
+                )
+            ]
+        )
+        let cancelled = WorkoutSession(
+            planNameSnapshot: "Cancelled",
+            startedAt: Date(timeIntervalSince1970: 3_000),
+            status: .cancelled,
+            exerciseRecords: [
+                ExerciseRecord(
+                    exerciseID: exerciseID,
+                    exerciseNameSnapshot: "Bench Press",
+                    sets: [
+                        WorkoutSetRecord(
+                            setNumber: 1,
+                            weight: 120,
+                            repetitions: 5,
+                            isCompleted: true
+                        )
+                    ]
+                )
+            ]
+        )
+
+        let session = WorkoutService.makeSession(
+            from: plan,
+            previousSessions: [newerIncomplete, cancelled, older]
+        )
+        let sets = session.orderedExerciseRecords[0].orderedSets
+
+        #expect(sets[0].weight == 72.5)
+        #expect(sets[0].repetitions == 6)
+        #expect(sets[1].weight == 70)
+        #expect(sets[1].repetitions == 8)
+    }
+
+    @Test("Workout prefill ignores unusable completed records and warm-ups")
+    func workoutPrefillIgnoresUnusableSets() {
+        let exerciseID = UUID()
+        let plan = WorkoutPlan(
+            name: "Full Body",
+            exercises: [
+                PlannedExercise(
+                    exerciseID: exerciseID,
+                    exerciseNameSnapshot: "Test Exercise",
+                    targetSets: 3,
+                    targetRepetitions: 10,
+                    targetWeight: 40
+                )
+            ]
+        )
+        let validOlder = WorkoutSession(
+            planNameSnapshot: "Valid older",
+            startedAt: Date(timeIntervalSince1970: 1_000),
+            status: .completed,
+            exerciseRecords: [
+                ExerciseRecord(
+                    exerciseID: exerciseID,
+                    exerciseNameSnapshot: "Test Exercise",
+                    sets: [
+                        WorkoutSetRecord(
+                            setNumber: 1,
+                            weight: 65,
+                            repetitions: 8,
+                            isCompleted: true
+                        ),
+                        WorkoutSetRecord(
+                            setNumber: 2,
+                            weight: 0,
+                            repetitions: 12,
+                            isCompleted: true
+                        ),
+                        WorkoutSetRecord(
+                            setNumber: 3,
+                            weight: 50,
+                            repetitions: 10,
+                            isCompleted: true
+                        ),
+                    ]
+                )
+            ]
+        )
+        let unusableNewer = WorkoutSession(
+            planNameSnapshot: "Unusable newer",
+            startedAt: Date(timeIntervalSince1970: 2_000),
+            status: .completed,
+            exerciseRecords: [
+                ExerciseRecord(
+                    exerciseID: exerciseID,
+                    exerciseNameSnapshot: "Test Exercise",
+                    sets: [
+                        WorkoutSetRecord(
+                            setNumber: 1,
+                            weight: .nan,
+                            repetitions: 5,
+                            isCompleted: true
+                        ),
+                        WorkoutSetRecord(
+                            setNumber: 2,
+                            weight: 100,
+                            repetitions: 0,
+                            isCompleted: true
+                        ),
+                        WorkoutSetRecord(
+                            setNumber: 3,
+                            weight: 100,
+                            repetitions: 5,
+                            isCompleted: true,
+                            isWarmup: true
+                        ),
+                    ]
+                )
+            ]
+        )
+
+        let session = WorkoutService.makeSession(
+            from: plan,
+            previousSessions: [validOlder, unusableNewer]
+        )
+        let sets = session.orderedExerciseRecords[0].orderedSets
+
+        #expect(sets[0].weight == 65)
+        #expect(sets[0].repetitions == 8)
+        #expect(sets[1].weight == 0)
+        #expect(sets[1].repetitions == 12)
+        #expect(sets[2].weight == 50)
+        #expect(sets[2].repetitions == 10)
+    }
+
     @Test("Historical snapshots survive plan changes")
     func historySnapshotsRemainValid() {
         let planned = PlannedExercise(exerciseNameSnapshot: "Bench Press", targetWeight: 60)

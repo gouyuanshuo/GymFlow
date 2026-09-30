@@ -163,15 +163,15 @@ static func estimatedOneRepMax(weight: Double, repetitions: Int) -> Double?
 **Interface:** Keep `WorkoutService.makeSession` unchanged. Replace the single newest-record lookup
 with a per-set historical lookup over completed sessions sorted newest-first.
 
-- [ ] **Step 1: RED newest-incomplete regression.** Create a newer completed session with a
+- [x] **Step 1: RED newest-incomplete regression.** Create a newer completed session with a
   matching exercise but only an incomplete set and an older completed session with a valid
   completed working set. Assert the new session receives the older weight/reps. Run the focused
   test and observe current plan fallback instead.
-- [ ] **Step 2: RED invalid-history coverage.** Add cancelled, warm-up, non-finite/negative weight,
+- [x] **Step 2: RED invalid-history coverage.** Add cancelled, warm-up, non-finite/negative weight,
   zero-repetition, and mismatched-exercise records ahead of a valid older record. Assert they are
   ignored. Add a multi-set case proving each target set finds its newest valid matching set and a
   no-history case proving plan fallback remains.
-- [ ] **Step 3: GREEN backward scan.** Build the `ExerciseIdentity` once per planned exercise. For
+- [x] **Step 3: GREEN backward scan.** Build the `ExerciseIdentity` once per planned exercise. For
   each target set number, lazily scan completed sessions newest-first and all matching records until
   finding a completed non-warm-up set with finite nonnegative weight and positive reps. Preserve
   ID-first matching and legacy normalized-name fallback.
