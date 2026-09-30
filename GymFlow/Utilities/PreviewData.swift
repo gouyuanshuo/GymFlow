@@ -31,18 +31,12 @@ struct GymFlowPreview<Content: View>: View {
 @MainActor
 private enum PreviewData {
     static func makeContainer() -> ModelContainer? {
-        let schema = Schema([
-            WorkoutPlan.self,
-            PlannedExercise.self,
-            ExerciseDefinition.self,
-            WorkoutSession.self,
-            ExerciseRecord.self,
-            WorkoutSetRecord.self,
-            ImportedTrack.self
-        ])
+        let schema = GymFlowDataStore.schema
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         do {
-            let container = try ModelContainer(for: schema, configurations: [configuration])
+            let container = try GymFlowDataStore.makeContainer(
+                configurations: [configuration]
+            )
             let context = container.mainContext
             if let plan = SampleDataSeeder.samplePlans().first {
                 context.insert(plan)
