@@ -37,13 +37,31 @@ struct WorkoutShareSummary: Equatable {
         WorkoutShareSummaryBuilder.displayName(for: workoutName)
     }
 
+    /// The hero label for the workout's date in the reader's local calendar.
+    func contextHeading(
+        relativeTo referenceDate: Date,
+        calendar: Calendar = .current
+    ) -> String {
+        calendar.isDate(date, inSameDayAs: referenceDate)
+            ? "TODAY'S WORKOUT"
+            : "WORKOUT SUMMARY"
+    }
+
     var accessibilityDescription: String {
+        accessibilityDescription(relativeTo: Date(), calendar: .current)
+    }
+
+    func accessibilityDescription(
+        relativeTo referenceDate: Date,
+        calendar: Calendar
+    ) -> String {
         let exerciseWord = exerciseCount == 1 ? "exercise" : "exercises"
         let setWord = setCount == 1 ? "set" : "sets"
         let personalBestDescription = personalBestHighlight.map {
             ", new \($0.typeTitle.lowercased()) for \($0.exerciseName), \($0.setDescription)"
         } ?? ""
-        return "\(workoutName), \(WorkoutShareFormatters.duration(duration)), "
+        return "\(contextHeading(relativeTo: referenceDate, calendar: calendar)). "
+            + "\(workoutName), \(WorkoutShareFormatters.duration(duration)), "
             + "\(exerciseCount) \(exerciseWord), \(setCount) \(setWord), "
             + "\(WorkoutShareFormatters.exactVolume(trainingVolume))"
             + personalBestDescription + "."

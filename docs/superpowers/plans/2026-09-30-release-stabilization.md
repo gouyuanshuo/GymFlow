@@ -105,11 +105,11 @@ func contextHeading(
 ) -> String
 ```
 
-- [ ] **Step 1: RED deterministic tests.** Use a fixed Gregorian calendar/time zone and fixed
+- [x] **Step 1: RED deterministic tests.** Use a fixed Gregorian calendar/time zone and fixed
   dates. Assert same-local-day summaries return `TODAY'S WORKOUT`, past summaries return
   `WORKOUT SUMMARY`, and `summary.date` remains the original historical date. Run the focused
   sharing tests and observe RED.
-- [ ] **Step 2: GREEN heading flow.** Add the pure helper to `WorkoutShareSummary`, pass its result
+- [x] **Step 2: GREEN heading flow.** Add the pure helper to `WorkoutShareSummary`, pass its result
   into `ShareCardHeroPanel`, and replace the hard-coded label. Make the accessibility description
   use the same contextual wording. Do not change renderer dimensions or date formatting.
 - [ ] **Step 3: Render regression.** Re-run summary tests and the existing 1179×2556 render tests to
