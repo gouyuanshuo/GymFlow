@@ -8,6 +8,20 @@ import SwiftUI
 struct WorkoutShareCardView: View {
     let summary: WorkoutShareSummary
     let background: WorkoutShareBackground
+    private let referenceDate: Date
+    private let calendar: Calendar
+
+    init(
+        summary: WorkoutShareSummary,
+        background: WorkoutShareBackground,
+        referenceDate: Date = Date(),
+        calendar: Calendar = .current
+    ) {
+        self.summary = summary
+        self.background = background
+        self.referenceDate = referenceDate
+        self.calendar = calendar
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -30,7 +44,9 @@ struct WorkoutShareCardView: View {
             contentMode: .fit
         )
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(summary.accessibilityDescription)
+        .accessibilityLabel(
+            summary.accessibilityDescription(relativeTo: referenceDate, calendar: calendar)
+        )
     }
 
     private func content(style: WorkoutShareCardStyle) -> some View {
@@ -39,7 +55,12 @@ struct WorkoutShareCardView: View {
             Spacer(minLength: style.length(24))
             ShareCardWorkoutHeader(workoutName: summary.displayWorkoutName, date: summary.date)
             Spacer(minLength: style.length(20))
-            ShareCardHeroPanel()
+            ShareCardHeroPanel(
+                heading: summary.contextHeading(
+                    relativeTo: referenceDate,
+                    calendar: calendar
+                )
+            )
             Spacer(minLength: style.length(18))
             ShareCardMetricsPanel(summary: summary)
             Spacer(minLength: style.length(18))
