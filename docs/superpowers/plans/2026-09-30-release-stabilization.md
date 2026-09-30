@@ -37,14 +37,14 @@ deleted on error.
 - Read only: `GymFlow.xcodeproj/project.pbxproj`, `.github/workflows/*`, current source/test files
 - Track only: this plan's checkbox state
 
-- [ ] **Step 1: Confirm workspace state.** Run `git status --short`, `git branch --show-current`,
+- [x] **Step 1: Confirm workspace state.** Run `git status --short`, `git branch --show-current`,
   `git rev-parse HEAD`, and `git worktree list`. Confirm the only intentional pre-task changes are
   the audited `PLANS.md`, `PROGRESS.md`, `AUDIT_REPORT.md`, and unrelated screenshot plus the
   approved design/plan documents.
-- [ ] **Step 2: Resolve the local test destination.** Run `xcrun simctl list devices available` and
+- [x] **Step 2: Resolve the local test destination.** Run `xcrun simctl list devices available` and
   record an installed iPhone simulator UDID. If CoreSimulator is unavailable, record that exact
   blocker and retain the generic simulator build/direct typecheck fallbacks.
-- [ ] **Step 3: Baseline compile/test signal.** Run the narrowest viable existing unit test command
+- [x] **Step 3: Baseline compile/test signal.** Run the narrowest viable existing unit test command
   before changes, without claiming suites that do not execute. Preserve the command output in the
   execution ledger.
 
@@ -67,24 +67,24 @@ static func resetSamplePlans(
 The operation removes `WorkoutPlan` rows only, preserves every `ExerciseDefinition`, resets sample
 seed markers, then calls existing seed/reconciliation logic.
 
-- [ ] **Step 1: RED identity test.** Seed an in-memory store, retain the built-in definition UUID,
+- [x] **Step 1: RED identity test.** Seed an in-memory store, retain the built-in definition UUID,
   insert a completed historical session whose `ExerciseRecord.exerciseID` points to it, invoke the
   current reset workflow through the proposed interface, and assert the definition UUID and
   historical link survive. Run the focused test and observe failure because the interface/behavior
   does not exist yet.
-- [ ] **Step 2: RED PB/idempotence assertions.** In the same fixture, assert
+- [x] **Step 2: RED PB/idempotence assertions.** In the same fixture, assert
   `ExercisePerformanceService.summary` still returns the historical Personal Best after reset, then
   reset a second time and assert normalized exercise names are unique and the definition count/IDs
   are unchanged. Observe RED before implementation.
-- [ ] **Step 3: GREEN reset operation.** Implement `SampleDataSeeder.resetSamplePlans`: fetch and
+- [x] **Step 3: GREEN reset operation.** Implement `SampleDataSeeder.resetSamplePlans`: fetch and
   delete plans, preserve definitions/sessions, set the plan/library seed markers so canonical
   built-ins and sample plans reconcile, save, and call `seedIfNeeded`. Do not modify an
   `ExerciseRecord` or create a replacement for an already matching normalized definition.
-- [ ] **Step 4: Wire Settings and correct its copy.** Replace `SettingsView.resetSamples` deletion
+- [x] **Step 4: Wire Settings and correct its copy.** Replace `SettingsView.resetSamples` deletion
   logic with the service call. Update only reset-specific confirmation/success wording so it no
   longer claims the exercise library will be replaced; leave the separate Delete All Workout Data
   action unchanged.
-- [ ] **Step 5: Verify and commit.** Run the focused reset tests, then the complete unit target if
+- [x] **Step 5: Verify and commit.** Run the focused reset tests, then the complete unit target if
   available. Run the generic `GymFlow` build. Inspect the diff for any history mutation and commit
   only Task 2 files plus checkpoint documentation.
 

@@ -179,6 +179,90 @@ struct ExerciseLibraryCalendarTests {
         #expect(try context.fetchCount(FetchDescriptor<ExerciseDefinition>()) == countAfterExplicitDeletion)
     }
 
+    @Test("Reset Sample Plans preserves exercise identity, history, and Personal Bests")
+    func resetSamplePlansPreservesExerciseIdentityAndHistory() throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: WorkoutPlan.self,
+            PlannedExercise.self,
+            ExerciseDefinition.self,
+            WorkoutSession.self,
+            ExerciseRecord.self,
+            WorkoutSetRecord.self,
+            configurations: configuration
+        )
+        let context = ModelContext(container)
+        let suiteName = "ExerciseLibraryCalendarTests.reset.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        try SampleDataSeeder.seedIfNeeded(context: context, defaults: defaults)
+        let originalDefinition = try #require(
+            context.fetch(FetchDescriptor<ExerciseDefinition>()).first {
+                $0.name == "Barbell Bench Press"
+            }
+        )
+        let stableExerciseID = originalDefinition.id
+        let startedAt = Date(timeIntervalSince1970: 100_000)
+        let historicalSet = WorkoutSetRecord(
+            setNumber: 1,
+            weight: 82.5,
+            repetitions: 5,
+            isCompleted: true,
+            completedAt: startedAt.addingTimeInterval(600)
+        )
+        let historicalRecord = ExerciseRecord(
+            exerciseID: stableExerciseID,
+            exerciseNameSnapshot: "Original Bench Snapshot",
+            sets: [historicalSet]
+        )
+        let historicalSession = WorkoutSession(
+            planNameSnapshot: "Historical Push",
+            startedAt: startedAt,
+            completedAt: startedAt.addingTimeInterval(1_800),
+            status: .completed,
+            exerciseRecords: [historicalRecord]
+        )
+        context.insert(historicalSession)
+        try context.save()
+
+        try SampleDataSeeder.resetSamplePlans(context: context, defaults: defaults)
+
+        let firstResetDefinitions = try context.fetch(FetchDescriptor<ExerciseDefinition>())
+        let retainedDefinition = try #require(
+            firstResetDefinitions.first { $0.id == stableExerciseID }
+        )
+        let retainedSessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let retainedSession = try #require(
+            retainedSessions.first { $0.id == historicalSession.id }
+        )
+        let retainedRecord = try #require(retainedSession.orderedExerciseRecords.first)
+        #expect(retainedDefinition.id == stableExerciseID)
+        #expect(retainedRecord.exerciseID == stableExerciseID)
+        #expect(retainedRecord.exerciseNameSnapshot == "Original Bench Snapshot")
+
+        let performance = ExercisePerformanceService.summary(
+            exerciseID: retainedDefinition.id,
+            exerciseName: retainedDefinition.name,
+            sessions: [retainedSession]
+        )
+        #expect(performance.heaviestWeightRecord?.weight == 82.5)
+        #expect(performance.heaviestWeightRecord?.repetitions == 5)
+
+        let firstResetIDs = Set(firstResetDefinitions.map(\.id))
+        try SampleDataSeeder.resetSamplePlans(context: context, defaults: defaults)
+        let secondResetDefinitions = try context.fetch(FetchDescriptor<ExerciseDefinition>())
+
+        #expect(Set(secondResetDefinitions.map(\.id)) == firstResetIDs)
+        #expect(secondResetDefinitions.count == firstResetDefinitions.count)
+        let normalizedNames = secondResetDefinitions.map {
+            ExerciseLibraryService.normalizedName($0.name)
+        }
+        #expect(
+            Set(normalizedNames).count == secondResetDefinitions.count
+        )
+    }
+
     @Test("Exercise edits and archive state persist across model contexts")
     func exerciseEditsPersist() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)

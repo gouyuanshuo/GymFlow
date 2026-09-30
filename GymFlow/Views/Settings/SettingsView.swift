@@ -116,11 +116,7 @@ struct SettingsView: View {
     }
 
     private func resetSamples() throws {
-        try deleteAll(WorkoutPlan.self)
-        try deleteAll(ExerciseDefinition.self)
-        UserDefaults.standard.set(false, forKey: SampleDataSeeder.seedingKey)
-        try modelContext.save()
-        try SampleDataSeeder.seedIfNeeded(context: modelContext)
+        try SampleDataSeeder.resetSamplePlans(context: modelContext)
     }
 
     private func deleteWorkoutData() throws {
@@ -216,7 +212,8 @@ private enum DestructiveDataAction: String, CaseIterable, Identifiable {
     var consequences: String {
         switch self {
         case .resetSamples:
-            "Your plans and exercise library will be replaced. Workout history and imported audio will remain."
+            "Your plans will be replaced with the sample plans. "
+                + "Your exercise library, workout history, and imported audio will remain."
         case .deleteWorkoutData:
             "This includes active workouts and completed history. This action cannot be undone."
         case .deleteImportedAudio:
@@ -234,7 +231,9 @@ private enum DestructiveDataAction: String, CaseIterable, Identifiable {
 
     var successDetail: String {
         switch self {
-        case .resetSamples: "The sample workout plans and exercise library are ready."
+        case .resetSamples:
+            "The sample workout plans are ready. "
+                + "Your exercise library and workout history were preserved."
         case .deleteWorkoutData: "Plans, exercises, active workouts, and history were removed."
         case .deleteImportedAudio: "All copied audio files were removed."
         }
