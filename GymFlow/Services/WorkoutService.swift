@@ -31,17 +31,21 @@ enum WorkoutService {
         playlist: Playlist? = nil,
         now: Date = Date()
     ) -> WorkoutSession {
-        // Sorted once here rather than inside `latestRecord`, which is called for every exercise in
-        // the plan and would otherwise re-filter and re-sort the whole history each time.
+        // Filter and sort once before each planned set searches backward through history.
         let historyNewestFirst = previousSessions
             .filter { $0.status == .completed }
             .sorted { $0.startedAt > $1.startedAt }
         let records = plan.orderedExercises.map { exercise in
-            let previousRecord = latestRecord(for: exercise, in: historyNewestFirst)
+            let identity = ExerciseIdentity(
+                id: exercise.exerciseID,
+                name: exercise.exerciseNameSnapshot
+            )
             let sets = (1...max(1, exercise.targetSets)).map { setNumber in
-                let previousSet = previousRecord?.orderedSets.first(where: {
-                    $0.setNumber == setNumber && $0.isCompleted
-                })
+                let previousSet = latestCompletedSet(
+                    number: setNumber,
+                    matching: identity,
+                    in: historyNewestFirst
+                )
                 return WorkoutSetRecord(
                     setNumber: setNumber,
                     weight: max(0, previousSet?.weight ?? exercise.targetWeight),
@@ -70,18 +74,31 @@ enum WorkoutService {
         )
     }
 
-    /// The last time this exercise was trained, given completed sessions already ordered
-    /// newest-first.
-    private static func latestRecord(
-        for exercise: PlannedExercise,
+    /// The newest usable working set with this number in completed history ordered newest-first.
+    private static func latestCompletedSet(
+        number: Int,
+        matching identity: ExerciseIdentity,
         in sessionsNewestFirst: [WorkoutSession]
-    ) -> ExerciseRecord? {
-        let identity = ExerciseIdentity(
-            id: exercise.exerciseID,
-            name: exercise.exerciseNameSnapshot
-        )
-        return sessionsNewestFirst.lazy
-            .compactMap { $0.orderedExerciseRecords.first(where: identity.matches) }
-            .first
+    ) -> WorkoutSetRecord? {
+        for session in sessionsNewestFirst {
+            // If an exercise appears twice in one workout, the later entry represents the most
+            // recent performance within that session.
+            for record in session.orderedExerciseRecords.reversed() where identity.matches(record) {
+                if let set = record.orderedSets.reversed().first(where: {
+                    $0.setNumber == number && isUsablePrefillSet($0)
+                }) {
+                    return set
+                }
+            }
+        }
+        return nil
+    }
+
+    private static func isUsablePrefillSet(_ set: WorkoutSetRecord) -> Bool {
+        set.isCompleted
+            && !set.isWarmup
+            && set.weight.isFinite
+            && set.weight >= 0
+            && set.repetitions > 0
     }
 }
