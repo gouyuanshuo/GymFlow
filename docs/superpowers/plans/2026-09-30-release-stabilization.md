@@ -205,22 +205,22 @@ enum GymFlowMigrationPlan: SchemaMigrationPlan {
 `GymFlowDataStore` will expose the shared current `Schema` and an internal configuration-injection
 path for disk migration tests, while its production `makeContainer()` call stays source-compatible.
 
-- [ ] **Step 1: RED schema contract test.** Assert the current version is exactly 1.0.0, all nine
+- [x] **Step 1: RED schema contract test.** Assert the current version is exactly 1.0.0, all nine
   expected persistent model types are registered, and the migration plan includes V1. Run the
   focused test before adding the schema types and observe RED.
-- [ ] **Step 2: RED disk compatibility fixture.** In a temporary directory, create and close a
+- [x] **Step 2: RED disk compatibility fixture.** In a temporary directory, create and close a
   persistent store with the pre-change implicit `Schema`. Insert an `ExerciseDefinition`, linked
   `WorkoutPlan`/`PlannedExercise`, completed `WorkoutSession`/`ExerciseRecord`/`WorkoutSetRecord`,
   plus stable UUIDs and a historical snapshot name. Reopen the same URL through the proposed
   versioned `GymFlowDataStore`; observe failure before the new interface exists.
-- [ ] **Step 3: GREEN V1 registration.** Add `GymFlowSchemaV1` and `GymFlowMigrationPlan`, construct
+- [x] **Step 3: GREEN V1 registration.** Add `GymFlowSchemaV1` and `GymFlowMigrationPlan`, construct
   the production container with `migrationPlan:`, and make PreviewData use the same complete schema
   (including playlists). Do not add a delete/recreate catch path.
-- [ ] **Step 4: Prove retained data.** Complete the disk test assertions for session status/date,
+- [x] **Step 4: Prove retained data.** Complete the disk test assertions for session status/date,
   definition UUID, planned/session exercise UUIDs, workout/set UUIDs and values, relationship
   ordering, and unchanged historical snapshot names. Add a negative inspection asserting no reset
   or store deletion code exists in `GymFlowDataStore`.
-- [ ] **Step 5: Verify migration behavior.** Run the migration test repeatedly against fresh
+- [x] **Step 5: Verify migration behavior.** Run the migration test repeatedly against fresh
   temporary stores, then all unit tests and the generic app build. Document that this validates
   adoption of an implicit V1 store, not a future V1→V2 transformation.
 - [ ] **Step 6: Verify and commit.** Run semantic lint/diff checks and commit Task 6 files.
