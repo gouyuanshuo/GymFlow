@@ -48,4 +48,45 @@ struct ExerciseProgressHistoryTests {
         #expect(sets.map(\.id) == [firstSet.id, secondSet.id, legacySet.id])
         #expect(sets.map(\.weight).max() == 100)
     }
+
+    @Test("Strength progress excludes warm-up and incomplete sets")
+    func completedWorkingSetsOnly() {
+        let exerciseID = UUID()
+        let workingSet = WorkoutSetRecord(
+            setNumber: 1,
+            weight: 70,
+            repetitions: 8,
+            isCompleted: true
+        )
+        let warmupSet = WorkoutSetRecord(
+            setNumber: 2,
+            weight: 100,
+            repetitions: 5,
+            isCompleted: true,
+            isWarmup: true
+        )
+        let incompleteSet = WorkoutSetRecord(
+            setNumber: 3,
+            weight: 120,
+            repetitions: 5
+        )
+        let session = WorkoutSession(
+            planNameSnapshot: "Progress",
+            status: .completed,
+            exerciseRecords: [
+                ExerciseRecord(
+                    exerciseID: exerciseID,
+                    exerciseNameSnapshot: "Bench Press",
+                    sets: [workingSet, warmupSet, incompleteSet]
+                )
+            ]
+        )
+
+        let sets = ExerciseProgressHistory.completedWorkingSets(
+            matching: ExerciseIdentity(id: exerciseID, name: "Bench Press"),
+            in: session
+        )
+
+        #expect(sets.map(\.id) == [workingSet.id])
+    }
 }
