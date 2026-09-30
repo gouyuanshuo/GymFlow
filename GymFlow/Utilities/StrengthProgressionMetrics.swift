@@ -5,17 +5,24 @@ struct StrengthSetMetrics: Equatable {
     let weight: Double
     let repetitions: Int
 
-    /// Epley's estimate is used only for sets of one through thirty repetitions.
-    var estimatedOneRepMax: Double {
-        guard weight > 0, repetitions > 0, repetitions <= 30 else { return weight }
-        return weight * (1 + Double(repetitions) / 30)
+    /// The canonical e1RM value, or `nil` when this set is outside the supported policy.
+    var estimatedOneRepMax: Double? {
+        ExercisePerformanceService.estimatedOneRepMax(
+            weight: weight,
+            repetitions: repetitions
+        )
     }
 }
 
 /// Shared rules for selecting and summarizing sets shown in strength history.
 enum StrengthProgressionMetrics {
     static func strongestSet(in sets: [StrengthSetMetrics]) -> StrengthSetMetrics? {
-        sets.max { $0.estimatedOneRepMax < $1.estimatedOneRepMax }
+        sets.compactMap { set -> (set: StrengthSetMetrics, estimate: Double)? in
+            guard let estimate = set.estimatedOneRepMax else { return nil }
+            return (set, estimate)
+        }
+        .max { $0.estimate < $1.estimate }?
+        .set
     }
 
     static func bestWeight(in sets: [StrengthSetMetrics]) -> Double {

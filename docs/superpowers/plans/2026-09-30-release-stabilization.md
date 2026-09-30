@@ -136,19 +136,19 @@ func contextHeading(
 static func estimatedOneRepMax(weight: Double, repetitions: Int) -> Double?
 ```
 
-- [ ] **Step 1: RED boundary tests.** Add explicit cases for reps 0, 1, 15, and 16; zero,
+- [x] **Step 1: RED boundary tests.** Add explicit cases for reps 0, 1, 15, and 16; zero,
   negative, infinity, and NaN weight; and expected Epley values at both valid boundaries. Existing
   service behavior should satisfy some assertions, establishing the canonical contract.
-- [ ] **Step 2: RED progress-consumer tests.** Change progression expectations so an unsupported
+- [x] **Step 2: RED progress-consumer tests.** Change progression expectations so an unsupported
   high-rep set has no e1RM, all-invalid sets yield no strongest set/chart point, and a valid set is
   selected over a heavier invalid set. Run focused tests and observe failures from the separate
   1...30/raw-weight fallback.
-- [ ] **Step 3: GREEN shared calculation.** Make `StrengthSetMetrics.estimatedOneRepMax` optional
+- [x] **Step 3: GREEN shared calculation.** Make `StrengthSetMetrics.estimatedOneRepMax` optional
   and delegate directly to `ExercisePerformanceService`. Make `strongestSet` compare only valid
   estimates. Make `StrengthDataPoint` creation failable (or require a validated shared estimate)
   so charts never label raw weight as e1RM. Update `ExerciseProgressView` to skip sessions without a
   canonical valid e1RM point.
-- [ ] **Step 4: Verify all consumers.** Trace and test Personal Best summary/events, Exercise
+- [x] **Step 4: Verify all consumers.** Trace and test Personal Best summary/events, Exercise
   Detail, Exercise Progress, chart construction, and share-card PR building. Confirm no other
   formula or repetition ceiling remains with `rg`.
 - [ ] **Step 5: Verify and commit.** Run focused performance/progression/sharing tests, all unit

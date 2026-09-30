@@ -137,10 +137,16 @@ struct ExerciseBestSummary {
 }
 
 enum ExercisePerformanceService {
+    /// Epley estimates are considered meaningful only for working sets of 1 through 15 reps.
     static let estimatedOneRepMaxRepetitionRange = 1 ... 15
     static let relevantLoadFraction = 0.5
     private static let comparisonTolerance = 0.000_1
 
+    /// Returns `weight × (1 + repetitions / 30)`, or `nil` when the set is outside the policy.
+    ///
+    /// Weight must be finite and positive, and repetitions must be in
+    /// ``estimatedOneRepMaxRepetitionRange``. Invalid sets are omitted from e1RM comparisons rather
+    /// than substituting raw weight and presenting it as an estimate.
     static func estimatedOneRepMax(weight: Double, repetitions: Int) -> Double? {
         guard weight.isFinite,
               weight > 0,
