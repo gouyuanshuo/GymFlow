@@ -11,7 +11,7 @@ struct StrengthDataPoint: Identifiable, Equatable {
     let totalVolume: Double
     let sessionName: String
 
-    init(
+    init?(
         id: UUID = UUID(),
         date: Date,
         weight: Double,
@@ -19,16 +19,17 @@ struct StrengthDataPoint: Identifiable, Equatable {
         totalVolume: Double = 0,
         sessionName: String = ""
     ) {
+        guard let estimatedOneRepMax = ExercisePerformanceService.estimatedOneRepMax(
+            weight: weight,
+            repetitions: repetitions
+        ) else { return nil }
         self.id = id
         self.date = date
         self.weight = weight
         self.repetitions = repetitions
         self.totalVolume = totalVolume
         self.sessionName = sessionName
-        self.estimated1RM = StrengthSetMetrics(
-            weight: weight,
-            repetitions: repetitions
-        ).estimatedOneRepMax
+        self.estimated1RM = estimatedOneRepMax
     }
 }
 

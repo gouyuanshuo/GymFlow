@@ -23,13 +23,32 @@ struct ExercisePerformanceServiceTests {
 
     @Test("Estimated one-rep max uses Epley for one through fifteen reps")
     func estimatedOneRepMaxCalculation() throws {
-        let estimate = try #require(
-            ExercisePerformanceService.estimatedOneRepMax(weight: 80, repetitions: 5)
+        let minimumEstimate = try #require(
+            ExercisePerformanceService.estimatedOneRepMax(weight: 80, repetitions: 1)
+        )
+        let maximumEstimate = try #require(
+            ExercisePerformanceService.estimatedOneRepMax(weight: 80, repetitions: 15)
         )
 
-        #expect(abs(estimate - 93.333_333) < 0.001)
+        #expect(ExercisePerformanceService.estimatedOneRepMaxRepetitionRange == 1 ... 15)
+        #expect(abs(minimumEstimate - 82.666_666) < 0.001)
+        #expect(abs(maximumEstimate - 120) < 0.001)
+        #expect(ExercisePerformanceService.estimatedOneRepMax(weight: 80, repetitions: 0) == nil)
         #expect(ExercisePerformanceService.estimatedOneRepMax(weight: 80, repetitions: 16) == nil)
         #expect(ExercisePerformanceService.estimatedOneRepMax(weight: 0, repetitions: 10) == nil)
+        #expect(ExercisePerformanceService.estimatedOneRepMax(weight: -80, repetitions: 5) == nil)
+        #expect(
+            ExercisePerformanceService.estimatedOneRepMax(
+                weight: .infinity,
+                repetitions: 5
+            ) == nil
+        )
+        #expect(
+            ExercisePerformanceService.estimatedOneRepMax(
+                weight: .nan,
+                repetitions: 5
+            ) == nil
+        )
     }
 
     @Test("Highest single-set volume is selected")
