@@ -617,4 +617,5 @@ Acceptance: every implemented behavior change has a failing focused check before
 
 - [x] Prepare `main` for GitHub publication with fresh source checks, independent regressions, and an explicit native-build blocker.
 - [x] Add `MAC_VALIDATION_GUIDE.md` covering clone/update, the GymFlow main scheme, simulator tests, signing, in-place iPhone installation, and physical acceptance.
+- [x] Publish and verify code commit `aa6f2d6` on GitHub `main`, preserving the prior audit and excluding the unrelated screenshot.
 - [ ] Complete native build, simulator unit/UI tests, and the twelve physical-device acceptance checks on the next Mac.
