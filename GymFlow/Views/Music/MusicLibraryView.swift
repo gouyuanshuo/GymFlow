@@ -8,6 +8,7 @@ struct MusicLibraryView: View {
     @Query(sort: \ImportedTrack.sortOrder) private var tracks: [ImportedTrack]
     @Query private var memberships: [PlaylistTrack]
     @State private var importerPresented = false
+    @State private var importInProgress = false
     @State private var pendingDeletion: ImportedTrack?
     @State private var pendingAddToPlaylist: ImportedTrack?
     @State private var errorMessage: String?
@@ -81,6 +82,7 @@ struct MusicLibraryView: View {
                                 Button("Import Audio", systemImage: "square.and.arrow.down") {
                                     importerPresented = true
                                 }
+                                .disabled(importInProgress)
                                 .buttonStyle(.borderedProminent)
                             }
                         } else {
@@ -153,6 +155,7 @@ struct MusicLibraryView: View {
                 if selectedSection == .library {
                     if !tracks.isEmpty && sortOrder == .libraryOrder { EditButton() }
                     Button("Import Audio", systemImage: "plus") { importerPresented = true }
+                        .disabled(importInProgress)
                         .accessibilityLabel("Import local audio")
                 }
             }
@@ -175,40 +178,56 @@ struct MusicLibraryView: View {
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {
-        var copiedFileNames: [String] = []
-        var insertedTracks: [ImportedTrack] = []
-        var activeStore: AudioFileStore?
+        guard !importInProgress else { return }
         do {
             let urls = try result.get()
-            let store = try AudioFileStore()
-            activeStore = store
-            var nextOrder = (tracks.map(\.sortOrder).max() ?? -1) + 1
-            for url in urls {
-                let accessing = url.startAccessingSecurityScopedResource()
-                defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-                let imported = try store.importAudio(from: url)
-                copiedFileNames.append(imported.storedFileName)
-                let track = ImportedTrack(
-                    title: imported.title,
-                    artist: imported.artist,
-                    storedFileName: imported.storedFileName,
-                    originalFileName: imported.originalFileName,
-                    fileExtension: imported.fileExtension,
-                    duration: imported.duration,
-                    sortOrder: nextOrder
-                )
-                insertedTracks.append(track)
-                modelContext.insert(track)
-                nextOrder += 1
-            }
-            try modelContext.save()
-        } catch {
-            for track in insertedTracks { modelContext.delete(track) }
-            if let activeStore {
-                for fileName in copiedFileNames {
-                    try? activeStore.delete(storedFileName: fileName)
+            guard !urls.isEmpty else { return }
+            importInProgress = true
+            let nextOrder = (tracks.map(\.sortOrder).max() ?? -1) + 1
+            Task { @MainActor in
+                defer { importInProgress = false }
+                do {
+                    let imported = try await Task.detached(priority: .userInitiated) {
+                        try AudioFileStore().importAudioBatch(from: urls)
+                    }.value
+                    var insertedTracks: [ImportedTrack] = []
+                    do {
+                        for (offset, file) in imported.enumerated() {
+                            let track = ImportedTrack(
+                                title: file.title,
+                                artist: file.artist,
+                                storedFileName: file.storedFileName,
+                                originalFileName: file.originalFileName,
+                                fileExtension: file.fileExtension,
+                                duration: file.duration,
+                                sortOrder: nextOrder + offset
+                            )
+                            insertedTracks.append(track)
+                            modelContext.insert(track)
+                        }
+                        try modelContext.save()
+                    } catch {
+                        for track in insertedTracks { modelContext.delete(track) }
+                        let names = imported.map(\.storedFileName)
+                        let cleanupError = await Task.detached(priority: .utility) { () -> String? in
+                            do {
+                                let store = try AudioFileStore()
+                                for name in names { try store.delete(storedFileName: name) }
+                                return nil
+                            } catch {
+                                return error.localizedDescription
+                            }
+                        }.value
+                        errorMessage = "The audio import did not finish. \(error.localizedDescription)"
+                        if let cleanupError {
+                            errorMessage? += " Copied files could not be cleaned up: \(cleanupError)"
+                        }
+                    }
+                } catch {
+                    errorMessage = "The audio import did not finish. \(error.localizedDescription)"
                 }
             }
+        } catch {
             errorMessage = "The audio import did not finish. \(error.localizedDescription)"
         }
     }

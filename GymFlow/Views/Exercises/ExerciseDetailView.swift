@@ -5,41 +5,42 @@ struct ExerciseDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query private var plans: [WorkoutPlan]
-    /// Every session, including in-progress ones, because "is this exercise in use?" must consider
-    /// them all.
-    @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
-    /// Performance history only comes from finished workouts, so the store filters those out here
-    /// rather than every derived value rescanning the full history.
-    @Query(
-        filter: WorkoutSession.predicate(status: .completed),
-        sort: \WorkoutSession.startedAt,
-        order: .reverse
-    )
-    private var completedSessions: [WorkoutSession]
+    /// Includes matching IDs and possible ID-less legacy entries across all statuses. The
+    /// canonical identity matcher handles the final legacy-name check in each consumer.
+    @Query private var candidateSessions: [WorkoutSession]
 
     let exercise: ExerciseDefinition
     @State private var editorPresented = false
     @State private var deleteConfirmation = false
     @State private var errorMessage: String?
 
+    init(exercise: ExerciseDefinition) {
+        self.exercise = exercise
+        _candidateSessions = Query(
+            filter: WorkoutSession.predicate(candidatesForExerciseID: exercise.id),
+            sort: \WorkoutSession.startedAt,
+            order: .reverse
+        )
+    }
+
+    private var completedSessions: [WorkoutSession] {
+        candidateSessions.filter { $0.status == .completed }
+    }
+
     private var isUsed: Bool {
-        ExerciseLibraryService.isUsed(exercise, plans: plans, sessions: sessions)
+        ExerciseLibraryService.isUsed(exercise, plans: plans, sessions: candidateSessions)
     }
 
     /// The most recent sessions in which this exercise was actually trained.
     ///
     /// Only the first few are shown, so the scan stops as soon as enough have been found instead of
     /// walking the user's entire history.
-    private var recentPerformance: [ExercisePerformanceItem] {
-        let identity = ExerciseIdentity(exercise)
-        var items: [ExercisePerformanceItem] = []
-        for session in completedSessions {
-            guard let record = session.orderedExerciseRecords.first(where: identity.matches),
-                  record.orderedSets.contains(where: \.isCompleted) else { continue }
-            items.append(ExercisePerformanceItem(session: session, record: record))
-            if items.count == Self.recentPerformanceLimit { break }
-        }
-        return items
+    private var recentPerformance: [ExerciseRecentSession] {
+        ExerciseProgressHistory.recentCompletedSessions(
+            matching: ExerciseIdentity(exercise),
+            in: completedSessions,
+            limit: Self.recentPerformanceLimit
+        )
     }
 
     private var bestSummary: ExerciseBestSummary {
@@ -228,7 +229,7 @@ struct ExerciseDetailView: View {
     }
 
     private func deleteExercise() {
-        guard !ExerciseLibraryService.isUsed(exercise, plans: plans, sessions: sessions) else {
+        guard !ExerciseLibraryService.isUsed(exercise, plans: plans, sessions: candidateSessions) else {
             errorMessage = "This exercise is now in use. Archive it instead."
             return
         }
@@ -318,12 +319,4 @@ private struct PersonalBestEventRow: View {
         .padding(.vertical, 3)
         .accessibilityElement(children: .combine)
     }
-}
-
-private struct ExercisePerformanceItem: Identifiable {
-    let session: WorkoutSession
-    let record: ExerciseRecord
-
-    var id: UUID { session.id }
-    var completedSets: [WorkoutSetRecord] { record.orderedSets.filter(\.isCompleted) }
 }

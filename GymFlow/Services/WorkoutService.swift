@@ -31,7 +31,7 @@ enum WorkoutService {
         playlist: Playlist? = nil,
         now: Date = Date()
     ) -> WorkoutSession {
-        // Filter and sort once before each planned set searches backward through history.
+        // All planned exercises share one completed-history ordering.
         let historyNewestFirst = previousSessions
             .filter { $0.status == .completed }
             .sorted { $0.startedAt > $1.startedAt }
@@ -40,12 +40,14 @@ enum WorkoutService {
                 id: exercise.exerciseID,
                 name: exercise.exerciseNameSnapshot
             )
-            let sets = (1...max(1, exercise.targetSets)).map { setNumber in
-                let previousSet = latestCompletedSet(
-                    number: setNumber,
-                    matching: identity,
-                    in: historyNewestFirst
-                )
+            let setCount = max(1, exercise.targetSets)
+            let previousSets = latestCompletedSets(
+                matching: identity,
+                setCount: setCount,
+                in: historyNewestFirst
+            )
+            let sets = (1...setCount).map { setNumber in
+                let previousSet = previousSets[setNumber]
                 return WorkoutSetRecord(
                     setNumber: setNumber,
                     weight: max(0, previousSet?.weight ?? exercise.targetWeight),
@@ -74,24 +76,27 @@ enum WorkoutService {
         )
     }
 
-    /// The newest usable working set with this number in completed history ordered newest-first.
-    private static func latestCompletedSet(
-        number: Int,
+    /// Resolves each target number once, preserving the latest usable set for that number.
+    private static func latestCompletedSets(
         matching identity: ExerciseIdentity,
+        setCount: Int,
         in sessionsNewestFirst: [WorkoutSession]
-    ) -> WorkoutSetRecord? {
-        for session in sessionsNewestFirst {
+    ) -> [Int: WorkoutSetRecord] {
+        var latestByNumber: [Int: WorkoutSetRecord] = [:]
+        history: for session in sessionsNewestFirst {
             // If an exercise appears twice in one workout, the later entry represents the most
             // recent performance within that session.
             for record in session.orderedExerciseRecords.reversed() where identity.matches(record) {
-                if let set = record.orderedSets.reversed().first(where: {
-                    $0.setNumber == number && isUsablePrefillSet($0)
-                }) {
-                    return set
+                for set in record.orderedSets.reversed() {
+                    guard (1...setCount).contains(set.setNumber),
+                          latestByNumber[set.setNumber] == nil,
+                          isUsablePrefillSet(set) else { continue }
+                    latestByNumber[set.setNumber] = set
+                    if latestByNumber.count == setCount { break history }
                 }
             }
         }
-        return nil
+        return latestByNumber
     }
 
     private static func isUsablePrefillSet(_ set: WorkoutSetRecord) -> Bool {
