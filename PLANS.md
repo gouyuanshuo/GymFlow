@@ -586,3 +586,35 @@ Acceptance: the five confirmed source defects are corrected and `main` is the st
 - [x] Publish the committed stabilization and release metadata to `origin/main` without merging Google Drive.
 
 Acceptance: GitHub `main` contains the audited stabilization tree and version `1.0.1` build `2`; physical release acceptance remains separately evidenced.
+
+## Deep diagnostic audit — 2026-10-06
+
+- [x] Record branch/HEAD/status/log/worktrees/stashes and compare stabilization, UI modernization, and Google Drive lineage.
+- [x] Attempt fresh clean main-scheme build, unit tests, UI tests, lint, and direct app/extension/test source typechecks; document the host-service blockers.
+- [x] Create a deterministic DEBUG-only in-memory benchmark at 500, 1,000, and 2,000 sessions without opening user data.
+- [x] Audit major SwiftUI invalidation, SwiftData query, timer, audio, sharing, memory ownership, concurrency, and migration paths; record evidence levels and fix order in `DEEP_AUDIT_REPORT.md`.
+- [ ] Execute the reproduction matrix and App Launch/SwiftUI/Time Profiler/Data Persistence/Allocations/Leaks/Swift Concurrency traces when a runnable simulator or device host is available.
+- [ ] Run current-HEAD Main Thread Checker, Thread Sanitizer on suitable targets, and physical background/audio/notification/Live Activity checks.
+
+Acceptance for diagnosis: service-scale measurements and source-confirmed defects are separated from unverified UI/device behavior; production source and user data stay untouched.
+
+## Controlled correctness and performance fix pass — 2026-10-06
+
+- [x] Read the audit/spec/engineering notes, preserve the current main worktree, and record fresh 500/1,000/2,000 service baselines before production edits.
+- [x] Fix Exercise Detail duplicate-entry recent history with RED→GREEN regression coverage.
+- [x] Optimize canonical PB and share-summary history traversal without changing PR rules; compare all benchmark scales.
+- [x] Resolve historical workout prefill values in one pass per planned exercise; retain older-valid-set semantics and compare all benchmark scales.
+- [x] Suppress unchanged rest publications and stop paused/ended audio progress timer; prove rest transitions with an executable probe; audio test source is typechecked but native execution remains pending.
+- [x] Narrow root and Active Workout audio observation where a small boundary exists; Music Library stays broad pending device evidence.
+- [x] Move music import copy/duration work off the UI actor, preserve security-scope lifetime/order/errors, and test naming/conflicts.
+- [x] Make sample reset and failed workout finish/cancel recoverable with isolated fault-injection tests.
+- [x] Run fresh main-scheme build/test attempts, direct app/test typechecks, strict concurrency check, lint, and final comparable benchmark; native commands remain environment-blocked.
+- [x] Record before/after evidence and physical-device checklist in `PERFORMANCE_FIX_REPORT.md`; stop without Charts or Google Drive work.
+
+Acceptance: every implemented behavior change has a failing focused check before code and a passing check afterward; native execution blockers are reported as blockers, and user history/files are preserved.
+
+## Transfer to another Mac — 2026-10-06
+
+- [x] Prepare `main` for GitHub publication with fresh source checks, independent regressions, and an explicit native-build blocker.
+- [x] Add `MAC_VALIDATION_GUIDE.md` covering clone/update, the GymFlow main scheme, simulator tests, signing, in-place iPhone installation, and physical acceptance.
+- [ ] Complete native build, simulator unit/UI tests, and the twelve physical-device acceptance checks on the next Mac.

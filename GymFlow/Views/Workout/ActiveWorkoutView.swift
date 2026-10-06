@@ -6,7 +6,6 @@ struct ActiveWorkoutView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
-    @EnvironmentObject private var audioPlayer: AudioPlayerService
     /// Only completed sessions can supply a previous performance, so the store filters them rather
     /// than handing the view every session ever recorded.
     @Query(
@@ -149,10 +148,8 @@ struct ActiveWorkoutView: View {
             .onAppear {
                 activeWorkoutSessionID = session.id.uuidString
                 restoreWorkoutPosition()
-                configureTimerFeedback()
                 restTimer.setNotificationSoundEnabled(timerSoundEnabled)
                 RestTimerNotificationScheduler.shared.prepareAuthorization()
-                restTimer.refresh()
                 syncLiveActivity()
                 refreshPreviousPerformance()
             }
@@ -171,6 +168,13 @@ struct ActiveWorkoutView: View {
             .onChange(of: restTimer.stateRevision) { _, _ in syncLiveActivity() }
             .onChange(of: timerSoundEnabled) { _, enabled in
                 restTimer.setNotificationSoundEnabled(enabled)
+            }
+            .background {
+                RestTimerFeedbackInstaller(
+                    restTimer: restTimer,
+                    soundEnabled: timerSoundEnabled,
+                    hapticEnabled: hapticsEnabled
+                )
             }
         }
     }
@@ -233,11 +237,7 @@ struct ActiveWorkoutView: View {
 
     private var workoutFooter: some View {
         VStack(spacing: 0) {
-            if MiniPlayerPresentationPolicy.showsWorkoutPlayer(
-                hasLoadedTrack: audioPlayer.currentTrack != nil,
-                isWorkoutPresented: true,
-                isNowPlayingPresented: nowPlayingPresentation.isPresented
-            ) {
+            if !nowPlayingPresentation.isPresented {
                 MiniPlayerView { nowPlayingPresentation.present() }
             }
 
@@ -391,47 +391,36 @@ struct ActiveWorkoutView: View {
     }
 
     private func finishWorkout() {
-        session.status = .completed
-        session.completedAt = Date()
-        restTimer.cancel()
         do {
-            try modelContext.save()
+            try WorkoutFinalizationService.persist(
+                session: session,
+                status: .completed,
+                completedAt: Date(),
+                restTimer: restTimer,
+                save: { try modelContext.save() }
+            )
             activeWorkoutSessionID = ""
             endLiveActivity()
             summaryPresented = true
         } catch {
-            session.status = .active
-            session.completedAt = nil
             errorMessage = "The workout could not be finished. \(error.localizedDescription)"
         }
     }
 
     private func cancelWorkout() {
-        session.status = .cancelled
-        session.completedAt = Date()
-        restTimer.cancel()
         do {
-            try modelContext.save()
+            try WorkoutFinalizationService.persist(
+                session: session,
+                status: .cancelled,
+                completedAt: Date(),
+                restTimer: restTimer,
+                save: { try modelContext.save() }
+            )
             activeWorkoutSessionID = ""
             endLiveActivity()
             dismiss()
         } catch {
-            session.status = .active
-            session.completedAt = nil
             errorMessage = "The workout could not be cancelled. \(error.localizedDescription)"
-        }
-    }
-
-    private func configureTimerFeedback() {
-        restTimer.onCompletion = {
-            guard UIApplication.shared.applicationState == .active else { return }
-            RestTimerAlertService.shared.play(
-                configuration: RestTimerAlertConfiguration(
-                    soundEnabled: timerSoundEnabled,
-                    hapticEnabled: hapticsEnabled
-                ),
-                audioPlayer: audioPlayer
-            )
         }
     }
 
@@ -449,5 +438,40 @@ struct ActiveWorkoutView: View {
 
     private var liveActivitySnapshot: WorkoutActivitySnapshot {
         liveActivity.snapshot(for: session)
+    }
+}
+
+/// Owns audio observation for rest alerts so playback progress does not redraw the workout screen.
+private struct RestTimerFeedbackInstaller: View {
+    @EnvironmentObject private var audioPlayer: AudioPlayerService
+    let restTimer: RestTimerService
+    let soundEnabled: Bool
+    let hapticEnabled: Bool
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .onAppear {
+                configure()
+                restTimer.refresh()
+            }
+            .onChange(of: soundEnabled) { _, _ in configure() }
+            .onChange(of: hapticEnabled) { _, _ in configure() }
+    }
+
+    private func configure() {
+        let player = audioPlayer
+        let configuration = RestTimerAlertConfiguration(
+            soundEnabled: soundEnabled,
+            hapticEnabled: hapticEnabled
+        )
+        restTimer.onCompletion = { [weak player] in
+            guard UIApplication.shared.applicationState == .active,
+                  let player else { return }
+            RestTimerAlertService.shared.play(
+                configuration: configuration,
+                audioPlayer: player
+            )
+        }
     }
 }

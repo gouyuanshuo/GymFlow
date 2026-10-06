@@ -107,15 +107,31 @@ enum SampleDataSeeder {
     /// genuinely missing.
     static func resetSamplePlans(
         context: ModelContext,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        makeSamplePlans: @MainActor () throws -> [WorkoutPlan] = { samplePlans() },
+        save: @MainActor (ModelContext) throws -> Void = { try $0.save() }
     ) throws {
-        for plan in try context.fetch(FetchDescriptor<WorkoutPlan>()) {
-            context.delete(plan)
+        // The shared context may hold edits from another screen. Preserve those before a reset
+        // rollback can discard them; this save does not include any reset mutation.
+        if context.hasChanges { try context.save() }
+        let existingPlans = try context.fetch(FetchDescriptor<WorkoutPlan>())
+        let replacements = try makeSamplePlans()
+        do {
+            let definitions = try ensureExerciseLibrary(
+                context: context,
+                defaults: defaults,
+                forceBuiltInRefresh: true
+            )
+            replacements.forEach(context.insert)
+            linkLegacyPlannedExercises(plans: replacements, definitions: definitions)
+            existingPlans.forEach(context.delete)
+            try save(context)
+        } catch {
+            context.rollback()
+            throw error
         }
-        defaults.set(false, forKey: seedingKey)
-        defaults.set(0, forKey: exerciseLibraryVersionKey)
-        try context.save()
-        try seedIfNeeded(context: context, defaults: defaults)
+        defaults.set(true, forKey: seedingKey)
+        defaults.set(currentExerciseLibraryVersion, forKey: exerciseLibraryVersionKey)
     }
 
     static func linkLegacyPlannedExercises(
@@ -163,16 +179,18 @@ enum SampleDataSeeder {
 
     private static func ensureExerciseLibrary(
         context: ModelContext,
-        defaults: UserDefaults
+        defaults: UserDefaults,
+        forceBuiltInRefresh: Bool = false
     ) throws -> [ExerciseDefinition] {
         var definitions = try context.fetch(FetchDescriptor<ExerciseDefinition>())
         var definitionsByName = Dictionary(
             definitions.map { (ExerciseLibraryService.normalizedName($0.name), $0) },
             uniquingKeysWith: { first, _ in first }
         )
-        let shouldUpgradeBuiltIns = defaults.integer(forKey: exerciseLibraryVersionKey)
-            < currentExerciseLibraryVersion
-        let shouldInstallMissingBuiltIns = !defaults.bool(forKey: seedingKey)
+        let shouldUpgradeBuiltIns = forceBuiltInRefresh
+            || defaults.integer(forKey: exerciseLibraryVersionKey) < currentExerciseLibraryVersion
+        let shouldInstallMissingBuiltIns = forceBuiltInRefresh
+            || !defaults.bool(forKey: seedingKey)
             || shouldUpgradeBuiltIns
 
         for seed in exerciseLibrary {

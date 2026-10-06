@@ -61,6 +61,19 @@ final class WorkoutSession {
         return #Predicate<WorkoutSession> { $0.statusRawValue == rawValue }
     }
 
+    /// Fetches a conservative candidate set for one library exercise.
+    ///
+    /// ID-less historical records need normalized-name matching in `ExerciseIdentity`, which
+    /// cannot be expressed against their unnormalized stored snapshot. Include those sessions,
+    /// then let the canonical matcher discard unrelated legacy names.
+    static func predicate(candidatesForExerciseID exerciseID: UUID) -> Predicate<WorkoutSession> {
+        #Predicate<WorkoutSession> { session in
+            session.exerciseRecords.contains { record in
+                record.exerciseID == exerciseID || record.exerciseID == nil
+            }
+        }
+    }
+
     var orderedExerciseRecords: [ExerciseRecord] {
         exerciseRecords.sorted { $0.sortOrder < $1.sortOrder }
     }

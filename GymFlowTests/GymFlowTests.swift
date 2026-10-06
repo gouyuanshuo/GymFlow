@@ -1,5 +1,6 @@
 import AVFoundation
 import AppIntents
+import Combine
 import Foundation
 import MediaPlayer
 import SwiftData
@@ -882,6 +883,56 @@ struct GymFlowTests {
         ) == "New Song.m4a")
     }
 
+    @Test("Batch audio import preserves selection order and resolves repeated names")
+    func audioBatchImportOrderingAndNames() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GymFlow-AudioBatch-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let sourceDirectory = root.appendingPathComponent("Sources", isDirectory: true)
+        let destination = root.appendingPathComponent("Imported", isDirectory: true)
+        try FileManager.default.createDirectory(at: sourceDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        let source = sourceDirectory.appendingPathComponent("Song.MP3")
+        try Data(repeating: 0, count: 32).write(to: source)
+        let existing = destination.appendingPathComponent("Song.mp3")
+        try Data([1, 2, 3]).write(to: existing)
+
+        let store = try AudioFileStore(directoryURL: destination)
+        let imported = try store.importAudioBatch(from: [source, source])
+
+        #expect(imported.map(\.storedFileName) == ["Song-2.mp3", "Song-3.mp3"])
+        #expect(imported.map(\.originalFileName) == ["Song.MP3", "Song.MP3"])
+        #expect(try Data(contentsOf: existing) == Data([1, 2, 3]))
+    }
+
+    @Test("Failed batch import removes only copies made by that batch")
+    func audioBatchImportRollback() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GymFlow-AudioRollback-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let sourceDirectory = root.appendingPathComponent("Sources", isDirectory: true)
+        let destination = root.appendingPathComponent("Imported", isDirectory: true)
+        try FileManager.default.createDirectory(at: sourceDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        let source = sourceDirectory.appendingPathComponent("New.mp3")
+        let missing = sourceDirectory.appendingPathComponent("Missing.mp3")
+        try Data(repeating: 0, count: 32).write(to: source)
+        let existing = destination.appendingPathComponent("Existing.mp3")
+        try Data([4, 5, 6]).write(to: existing)
+
+        let store = try AudioFileStore(directoryURL: destination)
+        do {
+            _ = try store.importAudioBatch(from: [source, missing])
+            Issue.record("A missing source should fail the import")
+        } catch AudioFileStoreError.sourceMissing {
+            // The first copied file must be removed below.
+        } catch {
+            Issue.record("Unexpected import error: \(error)")
+        }
+        #expect(!FileManager.default.fileExists(atPath: store.fileURL(for: "New.mp3").path))
+        #expect(try Data(contentsOf: existing) == Data([4, 5, 6]))
+    }
+
     @Test("Playlist CRUD preserves shared imported tracks and ordering")
     func playlistManagement() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
@@ -1028,6 +1079,62 @@ struct GymFlowTests {
 
         #expect(audioPlayer.lastError == nil)
         #expect(AVAudioSession.sharedInstance().category == .playback)
+    }
+
+    @Test("Stopped playback does not publish progress and paused playback resumes")
+    func pausedPlaybackDoesNotPublishProgress() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GymFlow-PausedAudio-\(UUID().uuidString)", isDirectory: true)
+        let suiteName = "GymFlowTests.PausedAudio.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            Issue.record("Could not create isolated UserDefaults")
+            return
+        }
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+            try? FileManager.default.removeItem(at: root)
+        }
+
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appendingPathComponent("Long Track.flac")
+        try writeSilentFLAC(to: source, duration: 5)
+        let store = try AudioFileStore(directoryURL: root.appendingPathComponent("Imported"))
+        let imported = try store.importAudio(from: source)
+        let track = ImportedTrack(
+            title: imported.title,
+            artist: imported.artist,
+            storedFileName: imported.storedFileName,
+            originalFileName: imported.originalFileName,
+            fileExtension: imported.fileExtension,
+            duration: imported.duration
+        )
+        let audioPlayer = AudioPlayerService(defaults: defaults, fileStore: store)
+        var progressPublications = 0
+        let observation = audioPlayer.$progress.sink { _ in progressPublications += 1 }
+        audioPlayer.setQueue([track], autoplay: true)
+        #expect(audioPlayer.isPlaying)
+        try await Task.sleep(for: .seconds(0.75))
+        audioPlayer.togglePlayPause()
+        #expect(!audioPlayer.isPlaying)
+        let pausedPosition = audioPlayer.progress
+        progressPublications = 0
+        try await Task.sleep(for: .seconds(1.25))
+        #expect(progressPublications == 0)
+        #expect(audioPlayer.progress == pausedPosition)
+
+        audioPlayer.togglePlayPause()
+        #expect(audioPlayer.isPlaying)
+        try await Task.sleep(for: .seconds(0.75))
+        #expect(audioPlayer.progress > pausedPosition)
+
+        audioPlayer.seek(to: max(0, audioPlayer.duration - 0.1))
+        try await Task.sleep(for: .seconds(0.75))
+        #expect(!audioPlayer.isPlaying)
+        progressPublications = 0
+        try await Task.sleep(for: .seconds(1.25))
+        #expect(progressPublications == 0)
+        audioPlayer.stop()
+        withExtendedLifetime(observation) {}
     }
 
     @Test("Live Activity state is compact and round-trips")
@@ -1383,7 +1490,7 @@ struct GymFlowTests {
         )
     }
 
-    private func writeSilentFLAC(to url: URL) throws {
+    private func writeSilentFLAC(to url: URL, duration: TimeInterval = 0.1) throws {
         let sampleRate = 44_100.0
         let settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatFLAC,
@@ -1393,10 +1500,13 @@ struct GymFlowTests {
         ]
         let file = try AVAudioFile(forWriting: url, settings: settings)
         guard let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1),
-              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4_410) else {
+              let buffer = AVAudioPCMBuffer(
+                pcmFormat: format,
+                frameCapacity: AVAudioFrameCount(sampleRate * duration)
+              ) else {
             throw CocoaError(.fileWriteUnknown)
         }
-        buffer.frameLength = 4_410
+        buffer.frameLength = AVAudioFrameCount(sampleRate * duration)
         try file.write(from: buffer)
     }
 
