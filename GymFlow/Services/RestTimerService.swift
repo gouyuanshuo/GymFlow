@@ -222,7 +222,9 @@ final class RestTimerService: ObservableObject {
     func refresh(now: Date = Date()) {
         guard isRunning, let endDate else { return }
         let remaining = Self.remaining(until: endDate, now: now)
-        remainingSeconds = remaining
+        if remainingSeconds != remaining {
+            remainingSeconds = remaining
+        }
         if remaining == 0 { complete() }
     }
 

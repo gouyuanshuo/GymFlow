@@ -89,4 +89,65 @@ struct ExerciseProgressHistoryTests {
 
         #expect(sets.map(\.id) == [workingSet.id])
     }
+
+    @Test("Recent detail history includes completed sets from later duplicate entries")
+    func recentDetailHistoryUsesAllMatchingRecords() {
+        let exerciseID = UUID()
+        let completed = WorkoutSetRecord(
+            setNumber: 1, weight: 75, repetitions: 8, isCompleted: true
+        )
+        let session = WorkoutSession(
+            planNameSnapshot: "Duplicate bench",
+            status: .completed,
+            exerciseRecords: [
+                ExerciseRecord(
+                    exerciseID: exerciseID, exerciseNameSnapshot: "Old bench",
+                    sortOrder: 0, sets: [WorkoutSetRecord(setNumber: 1)]
+                ),
+                ExerciseRecord(
+                    exerciseID: exerciseID, exerciseNameSnapshot: "Old bench",
+                    sortOrder: 1, sets: [completed]
+                ),
+            ]
+        )
+
+        let recent = ExerciseProgressHistory.recentCompletedSessions(
+            matching: ExerciseIdentity(id: exerciseID, name: "Renamed bench"),
+            in: [session], limit: 8
+        )
+
+        #expect(recent.map(\.session.id) == [session.id])
+        #expect(recent.first?.completedSets.map(\.id) == [completed.id])
+    }
+
+    @Test("Recent detail history keeps legacy fallback and ignores only-incomplete entries")
+    func recentDetailHistoryLegacyAndIncomplete() {
+        let exerciseID = UUID()
+        let legacySet = WorkoutSetRecord(setNumber: 1, weight: 60, repetitions: 10, isCompleted: true)
+        let legacy = WorkoutSession(
+            planNameSnapshot: "Legacy",
+            status: .completed,
+            exerciseRecords: [
+                ExerciseRecord(exerciseNameSnapshot: " BENCH  PRESS ", sets: [legacySet])
+            ]
+        )
+        let incomplete = WorkoutSession(
+            planNameSnapshot: "Incomplete",
+            status: .completed,
+            exerciseRecords: [
+                ExerciseRecord(
+                    exerciseID: exerciseID, exerciseNameSnapshot: "Bench Press",
+                    sets: [WorkoutSetRecord(setNumber: 1)]
+                )
+            ]
+        )
+
+        let recent = ExerciseProgressHistory.recentCompletedSessions(
+            matching: ExerciseIdentity(id: exerciseID, name: "Bench Press"),
+            in: [incomplete, legacy], limit: 8
+        )
+
+        #expect(recent.map(\.session.id) == [legacy.id])
+        #expect(recent.first?.completedSets.map(\.id) == [legacySet.id])
+    }
 }

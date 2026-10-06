@@ -4,8 +4,6 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
-    @EnvironmentObject private var audioPlayer: AudioPlayerService
-    @Query(sort: \ImportedTrack.sortOrder) private var tracks: [ImportedTrack]
     @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
     @AppStorage(PreferenceKey.activeWorkoutSessionID) private var activeWorkoutSessionID = ""
     @State private var selectedTab: AppTab = .today
@@ -15,16 +13,13 @@ struct ContentView: View {
 
     var body: some View {
         rootTabs
+            .background { AudioLibrarySynchronizer() }
             .sheet(isPresented: nowPlayingPresentedBinding) {
                 NowPlayingView()
             }
             .task {
                 seedInitialData()
-                audioPlayer.synchronizeLibrary(tracks)
                 reconcileWorkoutActivities()
-            }
-            .onChange(of: tracks.map(\.id)) { _, _ in
-                audioPlayer.synchronizeLibrary(tracks)
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
@@ -39,16 +34,18 @@ struct ContentView: View {
         if #available(iOS 26.0, *) {
             tabs
                 .tabViewBottomAccessory {
-                    if showsGlobalMiniPlayer {
-                        MiniPlayerView { nowPlayingPresentation.present() }
-                    }
+                    GlobalMiniPlayerAccessory(
+                        isWorkoutPresented: isWorkoutPresented,
+                        isNowPlayingPresented: nowPlayingPresentation.isPresented
+                    ) { nowPlayingPresentation.present() }
                 }
         } else {
             tabs
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if showsGlobalMiniPlayer {
-                        MiniPlayerView { nowPlayingPresentation.present() }
-                    }
+                    GlobalMiniPlayerAccessory(
+                        isWorkoutPresented: isWorkoutPresented,
+                        isNowPlayingPresented: nowPlayingPresentation.isPresented
+                    ) { nowPlayingPresentation.present() }
                 }
         }
     }
@@ -77,14 +74,6 @@ struct ContentView: View {
         }
     }
 
-    private var showsGlobalMiniPlayer: Bool {
-        MiniPlayerPresentationPolicy.showsGlobalPlayer(
-            hasLoadedTrack: audioPlayer.currentTrack != nil,
-            isWorkoutPresented: isWorkoutPresented,
-            isNowPlayingPresented: nowPlayingPresentation.isPresented
-        )
-    }
-
     private var nowPlayingPresentedBinding: Binding<Bool> {
         Binding(
             get: { nowPlayingPresentation.isPresented },
@@ -111,6 +100,38 @@ struct ContentView: View {
             activeWorkoutSessionID = selectedSessionID?.uuidString ?? ""
         } catch {
             seedingError = "An interrupted workout could not be reconciled. \(error.localizedDescription)"
+        }
+    }
+}
+
+/// Syncs the audio library without observing playback in the root view.
+private struct AudioLibrarySynchronizer: View {
+    @EnvironmentObject private var audioPlayer: AudioPlayerService
+    @Query(sort: \ImportedTrack.sortOrder) private var tracks: [ImportedTrack]
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .task { audioPlayer.synchronizeLibrary(tracks) }
+            .onChange(of: tracks.map(\.id)) { _, _ in
+                audioPlayer.synchronizeLibrary(tracks)
+            }
+    }
+}
+
+private struct GlobalMiniPlayerAccessory: View {
+    @EnvironmentObject private var audioPlayer: AudioPlayerService
+    let isWorkoutPresented: Bool
+    let isNowPlayingPresented: Bool
+    let openNowPlaying: () -> Void
+
+    var body: some View {
+        if MiniPlayerPresentationPolicy.showsGlobalPlayer(
+            hasLoadedTrack: audioPlayer.currentTrack != nil,
+            isWorkoutPresented: isWorkoutPresented,
+            isNowPlayingPresented: isNowPlayingPresented
+        ) {
+            MiniPlayerView(onOpenNowPlaying: openNowPlaying)
         }
     }
 }

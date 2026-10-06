@@ -17,7 +17,7 @@ enum AudioFileStoreError: LocalizedError {
     }
 }
 
-struct ImportedAudioFile {
+struct ImportedAudioFile: Sendable {
     let title: String
     let artist: String
     let storedFileName: String
@@ -49,6 +49,32 @@ struct AudioFileStore {
     }
 
     func importAudio(from sourceURL: URL) throws -> ImportedAudioFile {
+        guard let imported = try importAudioBatch(from: [sourceURL]).first else {
+            throw AudioFileStoreError.sourceMissing
+        }
+        return imported
+    }
+
+    /// Copies a selection in order while reading the destination directory only once.
+    /// The caller can run this synchronous disk and metadata work off the main actor.
+    func importAudioBatch(from sourceURLs: [URL]) throws -> [ImportedAudioFile] {
+        var existingNames = Set(try fileManager.contentsOfDirectory(atPath: directoryURL.path))
+        var imported: [ImportedAudioFile] = []
+        do {
+            for sourceURL in sourceURLs {
+                let accessing = sourceURL.startAccessingSecurityScopedResource()
+                defer { if accessing { sourceURL.stopAccessingSecurityScopedResource() } }
+                let file = try copyAudio(from: sourceURL, existingNames: &existingNames)
+                imported.append(file)
+            }
+            return imported
+        } catch {
+            for file in imported { try? delete(storedFileName: file.storedFileName) }
+            throw error
+        }
+    }
+
+    private func copyAudio(from sourceURL: URL, existingNames: inout Set<String>) throws -> ImportedAudioFile {
         guard fileManager.fileExists(atPath: sourceURL.path) else { throw AudioFileStoreError.sourceMissing }
         guard fileManager.isReadableFile(atPath: sourceURL.path) else { throw AudioFileStoreError.sourceUnreadable }
 
@@ -59,10 +85,11 @@ struct AudioFileStore {
 
         let storedName = Self.availableDestinationFileName(
             originalFileName: sourceURL.lastPathComponent,
-            existingNames: Set((try? fileManager.contentsOfDirectory(atPath: directoryURL.path)) ?? [])
+            existingNames: existingNames
         )
         let destination = fileURL(for: storedName)
         try fileManager.copyItem(at: sourceURL, to: destination)
+        existingNames.insert(storedName)
 
         let player = try? AVAudioPlayer(contentsOf: destination)
         let originalName = sourceURL.lastPathComponent

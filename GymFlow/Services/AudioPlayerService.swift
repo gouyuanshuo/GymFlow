@@ -199,8 +199,7 @@ final class AudioPlayerService: NSObject, ObservableObject, AVAudioPlayerDelegat
         isPlaying = false
         progress = 0
         duration = 0
-        progressTimer?.invalidate()
-        progressTimer = nil
+        stopProgressTimer()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         MPNowPlayingInfoCenter.default().playbackState = .stopped
         persistSnapshot()
@@ -260,19 +259,21 @@ final class AudioPlayerService: NSObject, ObservableObject, AVAudioPlayerDelegat
             newPlayer.delegate = self
             newPlayer.prepareToPlay()
             newPlayer.currentTime = min(max(0, startingAt), newPlayer.duration)
+            if autoplay {
+                try AVAudioSession.sharedInstance().setActive(true)
+            }
+            stopProgressTimer()
+            player?.stop()
             player = newPlayer
             currentTrack = track
             duration = newPlayer.duration
             progress = newPlayer.currentTime
             if autoplay {
-                try AVAudioSession.sharedInstance().setActive(true)
                 newPlayer.play()
-                startProgressTimer()
                 lastError = nil
-            } else {
-                progressTimer?.invalidate()
             }
             isPlaying = autoplay && newPlayer.isPlaying
+            if isPlaying { startProgressTimer() }
             updateNowPlayingInfo()
             persistSnapshot()
         } catch {
@@ -289,8 +290,9 @@ final class AudioPlayerService: NSObject, ObservableObject, AVAudioPlayerDelegat
                 repeatMode: repeatMode,
                 automatic: automatic
               ) else {
-            isPlaying = false
-            progress = duration
+            stopProgressTimer()
+            if isPlaying { isPlaying = false }
+            if progress != duration { progress = duration }
             updateNowPlayingInfo()
             persistSnapshot()
             return
@@ -320,7 +322,8 @@ final class AudioPlayerService: NSObject, ObservableObject, AVAudioPlayerDelegat
     }
 
     private func startProgressTimer() {
-        progressTimer?.invalidate()
+        stopProgressTimer()
+        guard player?.isPlaying == true else { return }
         let timer = Timer(
             timeInterval: 0.5,
             target: self,
@@ -332,13 +335,27 @@ final class AudioPlayerService: NSObject, ObservableObject, AVAudioPlayerDelegat
         progressTimer = timer
     }
 
+    private func stopProgressTimer() {
+        progressTimer?.invalidate()
+        progressTimer = nil
+    }
+
     @objc private func updateProgress() {
-        guard let player else { return }
-        progress = player.currentTime
-        duration = player.duration
-        isPlaying = player.isPlaying
-        updateNowPlayingInfo()
-        persistSnapshotThrottled()
+        guard let player else {
+            stopProgressTimer()
+            return
+        }
+        let currentTime = player.currentTime
+        let currentDuration = player.duration
+        let currentlyPlaying = player.isPlaying
+        let changed = progress != currentTime || duration != currentDuration
+            || isPlaying != currentlyPlaying
+        if progress != currentTime { progress = currentTime }
+        if duration != currentDuration { duration = currentDuration }
+        if isPlaying != currentlyPlaying { isPlaying = currentlyPlaying }
+        if !currentlyPlaying { stopProgressTimer() }
+        if changed { updateNowPlayingInfo() }
+        if currentlyPlaying { persistSnapshotThrottled() }
     }
 
     /// Writes the resume snapshot at most once per `snapshotPersistenceInterval`.
@@ -399,7 +416,9 @@ final class AudioPlayerService: NSObject, ObservableObject, AVAudioPlayerDelegat
 
     private func pausePlayback() {
         player?.pause()
-        isPlaying = false
+        stopProgressTimer()
+        if let player, progress != player.currentTime { progress = player.currentTime }
+        if isPlaying { isPlaying = false }
         updateNowPlayingInfo()
         persistSnapshot()
     }
@@ -412,9 +431,9 @@ final class AudioPlayerService: NSObject, ObservableObject, AVAudioPlayerDelegat
         do {
             try AVAudioSession.sharedInstance().setActive(true)
             player.play()
-            isPlaying = player.isPlaying
+            if isPlaying != player.isPlaying { isPlaying = player.isPlaying }
             lastError = nil
-            startProgressTimer()
+            if isPlaying { startProgressTimer() }
             updateNowPlayingInfo()
             persistSnapshot()
         } catch {
@@ -458,10 +477,7 @@ final class AudioPlayerService: NSObject, ObservableObject, AVAudioPlayerDelegat
         switch type {
         case .began:
             wasPlayingBeforeInterruption = isPlaying || player?.isPlaying == true
-            player?.pause()
-            isPlaying = false
-            updateNowPlayingInfo()
-            persistSnapshot()
+            pausePlayback()
         case .ended:
             let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
             if wasPlayingBeforeInterruption && options.contains(.shouldResume) {

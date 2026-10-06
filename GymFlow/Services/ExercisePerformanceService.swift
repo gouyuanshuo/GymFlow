@@ -172,10 +172,16 @@ enum ExercisePerformanceService {
     ) -> ExerciseBestSummary {
         let identity = ExerciseIdentity(id: exerciseID, name: exerciseName)
         let orderedSessions = validSessions(from: sessions)
-        let records = orderedSessions.flatMap { session in
-            performanceRecords(in: session, matching: identity)
+        var records: [ExercisePerformanceRecord] = []
+        var state = PerformanceState()
+        var events: [ExercisePREvent] = []
+        for session in orderedSessions {
+            let sessionRecords = performanceRecords(in: session, matching: identity)
+            guard !sessionRecords.isEmpty else { continue }
+            records.append(contentsOf: sessionRecords)
+            events.append(contentsOf: recordEvents(in: sessionRecords, comparedTo: state))
+            state.add(sessionRecords)
         }
-        let repRecords = bestRepRecordsByWeight(from: records)
         let heaviest = bestRecord(in: records) { $0.weight > 0 ? $0.weight : nil }
         let bestEstimated = bestRecord(in: records, value: \.estimatedOneRepMax)
         let bestVolume = bestRecord(in: records) { $0.setVolume > 0 ? $0.setVolume : nil }
@@ -188,11 +194,8 @@ enum ExercisePerformanceService {
             ),
             estimatedOneRepMaxRecord: bestEstimated,
             bestSetVolumeRecord: bestVolume,
-            repRecordsByWeight: repRecords,
-            personalBestEvents: personalBestEvents(
-                matching: identity,
-                sessions: orderedSessions
-            )
+            repRecordsByWeight: state.repRecordsByWeight,
+            personalBestEvents: sortedEvents(events)
         )
     }
 
@@ -207,10 +210,21 @@ enum ExercisePerformanceService {
     ) -> [ExercisePREvent] {
         guard isValid(session: session) else { return [] }
 
-        let priorSessions = validSessions(from: sessions).filter { candidate in
-            candidate.id != session.id && occurs(candidate, before: session)
+        let currentIdentities = session.orderedExerciseRecords.map {
+            ExerciseIdentity(id: $0.exerciseID, name: $0.exerciseNameSnapshot)
         }
-        let history = PerformanceHistory(priorSessions)
+        let relevantIDs = Set(currentIdentities.compactMap(\.id))
+        let relevantLegacyNames = Set(currentIdentities.map(\.normalizedName))
+        let priorSessions = sessions.filter { candidate in
+            isValid(session: candidate)
+                && candidate.id != session.id
+                && occurs(candidate, before: session)
+        }
+        let history = PerformanceHistory(
+            priorSessions,
+            relevantIDs: relevantIDs,
+            relevantLegacyNames: relevantLegacyNames
+        )
         var events: [ExercisePREvent] = []
         var processedExerciseIdentities: Set<String> = []
 
@@ -228,23 +242,6 @@ enum ExercisePerformanceService {
                 in: currentRecords,
                 comparedTo: history.bests(for: identity)
             ))
-        }
-
-        return sortedEvents(events)
-    }
-
-    private static func personalBestEvents(
-        matching identity: ExerciseIdentity,
-        sessions: [WorkoutSession]
-    ) -> [ExercisePREvent] {
-        var state = PerformanceState()
-        var events: [ExercisePREvent] = []
-
-        for session in sessions {
-            let records = performanceRecords(in: session, matching: identity)
-            guard !records.isEmpty else { continue }
-            events.append(contentsOf: recordEvents(in: records, comparedTo: state))
-            state.add(records)
         }
 
         return sortedEvents(events)
@@ -304,9 +301,14 @@ enum ExercisePerformanceService {
         matching identity: ExerciseIdentity
     ) -> [ExercisePerformanceRecord] {
         guard let completedAt = validCompletionDate(for: session) else { return [] }
-        return session.orderedExerciseRecords
-            .filter(identity.matches)
-            .flatMap { performanceRecords(in: $0, of: session, completedAt: completedAt) }
+        let matchingRecords = session.exerciseRecords.filter(identity.matches)
+        guard !matchingRecords.isEmpty else { return [] }
+        let orderedMatches = matchingRecords.count > 1
+            ? matchingRecords.sorted { $0.sortOrder < $1.sortOrder }
+            : matchingRecords
+        return orderedMatches.flatMap {
+            performanceRecords(in: $0, of: session, completedAt: completedAt)
+        }
     }
 
     /// The valid working sets logged under one exercise entry of an already-validated session.
@@ -544,10 +546,25 @@ enum ExercisePerformanceService {
         private var statesByExerciseID: [UUID: PerformanceState] = [:]
         private var legacyStatesByNormalizedName: [String: PerformanceState] = [:]
 
-        init(_ priorSessions: [WorkoutSession]) {
+        init(
+            _ priorSessions: [WorkoutSession],
+            relevantIDs: Set<UUID>,
+            relevantLegacyNames: Set<String>
+        ) {
             for session in priorSessions {
                 guard let completedAt = validCompletionDate(for: session) else { continue }
                 for exerciseRecord in session.exerciseRecords {
+                    let legacyName: String?
+                    if let exerciseID = exerciseRecord.exerciseID {
+                        guard relevantIDs.contains(exerciseID) else { continue }
+                        legacyName = nil
+                    } else {
+                        let name = ExerciseLibraryService.normalizedName(
+                            exerciseRecord.exerciseNameSnapshot
+                        )
+                        guard relevantLegacyNames.contains(name) else { continue }
+                        legacyName = name
+                    }
                     let records = performanceRecords(
                         in: exerciseRecord,
                         of: session,
@@ -556,10 +573,7 @@ enum ExercisePerformanceService {
                     guard !records.isEmpty else { continue }
                     if let exerciseID = exerciseRecord.exerciseID {
                         statesByExerciseID[exerciseID, default: PerformanceState()].add(records)
-                    } else {
-                        let name = ExerciseLibraryService.normalizedName(
-                            exerciseRecord.exerciseNameSnapshot
-                        )
+                    } else if let name = legacyName {
                         legacyStatesByNormalizedName[name, default: PerformanceState()].add(records)
                     }
                 }
