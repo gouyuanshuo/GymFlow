@@ -2,9 +2,9 @@ name: iOS validation
 
 on:
   push:
-    branches: [main, feature/ui-ux-modernization]
+    branches: [master, feature/ui-ux-modernization]
   pull_request:
-    branches: [main]
+    branches: [master]
   workflow_dispatch:
 
 permissions:
